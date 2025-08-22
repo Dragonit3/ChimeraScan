@@ -279,6 +279,7 @@ taskkill /PID <PID> /F
   - Integração com Etherscan API
   - Monitoramento de blocos em tempo real
   - Fallback automático para modo simulação
+- [ ] Configurar Corretamente a Regra de Blackllist
 - [ ] Machine Learning para detecção de anomalias
 - [ ] Notificações por email/webhook
 - [ ] Autenticação e autorização
