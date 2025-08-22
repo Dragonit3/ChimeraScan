@@ -27,7 +27,7 @@ def create_sample_transactions():
         "fundeddate_from": (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z"  # Carteira de 30 dias
     }
     
-    # Transação suspeita - Alto valor
+    # Transação suspeita
     high_value_tx = {
         "hash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
         "from_address": "0x123456789abcdef123456789abcdef123456789a",
