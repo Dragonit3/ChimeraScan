@@ -82,7 +82,9 @@ async def analyze_transaction():
             block_number=int(data["block_number"]),
             transaction_type=TransactionType(data.get("transaction_type", "TRANSFER")),
             token_address=data.get("token_address"),
-            token_amount=float(data["token_amount"]) if data.get("token_amount") else None
+            token_amount=float(data["token_amount"]) if data.get("token_amount") else None,
+            fundeddate_from=datetime.fromisoformat(data["fundeddate_from"].replace('Z', '+00:00')) if data.get("fundeddate_from") else None,
+            fundeddate_to=datetime.fromisoformat(data["fundeddate_to"].replace('Z', '+00:00')) if data.get("fundeddate_to") else None
         )
         
         # Analisar transação

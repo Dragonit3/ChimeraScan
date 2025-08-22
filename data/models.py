@@ -170,6 +170,9 @@ class TransactionData:
     token_amount: Optional[float] = None
     risk_score: Optional[float] = None
     context: Dict[str, Any] = field(default_factory=dict)
+    # Campos opcionais para análise de carteira nova
+    fundeddate_from: Optional[datetime] = None
+    fundeddate_to: Optional[datetime] = None
 
 @dataclass
 class AlertData:

@@ -137,23 +137,45 @@ class RuleEngine(IRuleEngine):
         """Regra: Interação com carteira nova"""
         rule_config = self.rules_config["institutional_rules"]["new_wallet_interaction"]
         
-        # Simular verificação de idade da carteira (seria implementado com dados reais)
-        wallet_age_hours = await self._get_wallet_age(transaction.to_address or transaction.from_address)
+        # Verificar ambas as carteiras: from_address e to_address
+        from_age_hours = await self._get_wallet_age_for_address(transaction.from_address, transaction, "from")
+        to_age_hours = await self._get_wallet_age_for_address(transaction.to_address, transaction, "to") if transaction.to_address else None
+        
         threshold_hours = rule_config["wallet_age_hours"]
         min_value = rule_config["min_value_usd"]
         
-        if wallet_age_hours < threshold_hours and transaction.value >= min_value:
+        # Verificar se alguma das carteiras é nova e o valor é suficiente
+        new_wallet_detected = False
+        youngest_age = None
+        wallet_type = None
+        
+        if from_age_hours < threshold_hours and transaction.value >= min_value:
+            new_wallet_detected = True
+            youngest_age = from_age_hours
+            wallet_type = "from_address"
+        
+        if to_age_hours is not None and to_age_hours < threshold_hours and transaction.value >= min_value:
+            if not new_wallet_detected or to_age_hours < youngest_age:
+                new_wallet_detected = True
+                youngest_age = to_age_hours
+                wallet_type = "to_address"
+        
+        if new_wallet_detected:
             return RuleResult(
                 rule_name="new_wallet_interaction",
                 triggered=True,
                 severity=RiskLevel(rule_config["severity"]),
                 confidence=0.7,
-                alert_title=f"New Wallet Interaction: {wallet_age_hours:.1f}h old",
-                alert_description=f"Transaction with wallet created {wallet_age_hours:.1f} hours ago",
+                alert_title=f"New Wallet Interaction: {youngest_age:.1f}h old ({wallet_type})",
+                alert_description=f"Transaction with {wallet_type} wallet created {youngest_age:.1f} hours ago",
                 context={
-                    "wallet_age_hours": wallet_age_hours,
+                    "wallet_age_hours": youngest_age,
+                    "wallet_type": wallet_type,
+                    "from_age_hours": from_age_hours,
+                    "to_age_hours": to_age_hours,
                     "threshold_hours": threshold_hours,
-                    "transaction_value": transaction.value
+                    "transaction_value": transaction.value,
+                    "used_fundeddate": transaction.fundeddate_from is not None or transaction.fundeddate_to is not None
                 },
                 generate_alert=rule_config["action"] == "immediate_alert"
             )
@@ -348,10 +370,58 @@ class RuleEngine(IRuleEngine):
     
     # Métodos auxiliares (implementações simplificadas)
     
-    async def _get_wallet_age(self, address: str) -> float:
-        """Obtém idade da carteira em horas"""
-        # Implementação simulada - seria consulta real ao blockchain
+    async def _get_wallet_age_for_address(self, address: str, transaction: Optional[TransactionData] = None, wallet_type: str = "unknown") -> float:
+        """
+        Obtém idade da carteira específica em horas
+        
+        Args:
+            address: Endereço da carteira
+            transaction: Dados da transação (opcional, para usar fundeddate_from/to)
+            wallet_type: "from" ou "to" para determinar qual fundeddate usar
+        
+        Returns:
+            Idade da carteira em horas
+        """
+        if not address:
+            return 48.0  # Valor padrão se endereço não fornecido
+            
+        # Se as datas de funded foram fornecidas, usar elas para calcular a idade
+        if transaction:
+            current_time = transaction.timestamp
+            funded_date = None
+            
+            # Usar a data correta baseada no tipo de carteira
+            if wallet_type == "from" and transaction.fundeddate_from:
+                funded_date = transaction.fundeddate_from
+            elif wallet_type == "to" and transaction.fundeddate_to:
+                funded_date = transaction.fundeddate_to
+            elif transaction.fundeddate_from or transaction.fundeddate_to:
+                # Fallback: usar qualquer data disponível
+                funded_date = transaction.fundeddate_from or transaction.fundeddate_to
+            
+            if funded_date:
+                # Calcular idade em horas
+                age_delta = current_time - funded_date
+                wallet_age_hours = age_delta.total_seconds() / 3600.0
+                
+                # Garantir que seja positivo
+                return max(0.0, wallet_age_hours)
+        
+        # Implementação simulada padrão - seria consulta real ao blockchain
         return 48.0  # 48 horas como padrão
+
+    async def _get_wallet_age(self, address: str, transaction: Optional[TransactionData] = None) -> float:
+        """
+        Obtém idade da carteira em horas (método legado para compatibilidade)
+        
+        Args:
+            address: Endereço da carteira
+            transaction: Dados da transação (opcional, para usar fundeddate_from/to)
+        
+        Returns:
+            Idade da carteira em horas
+        """
+        return await self._get_wallet_age_for_address(address, transaction)
     
     async def _get_average_gas_price(self) -> float:
         """Obtém preço médio atual de gas"""

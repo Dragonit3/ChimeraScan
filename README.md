@@ -79,6 +79,7 @@ fraud-detection-system/
    - Análise de risco baseada em múltiplos fatores
    - Regras customizáveis via JSON
    - Pontuação de risco de 0.0 a 1.0
+   - **Análise de Carteira Nova**: Suporte a `fundeddate_from`/`fundeddate_to` para detecção precisa de interações com carteiras recém-criadas
 
 ### 🔧 Tecnologias Utilizadas
 - **Backend**: Python 3.8+, Flask 2.x, SQLAlchemy
@@ -135,6 +136,12 @@ Retorna métricas atualizadas do sistema incluindo uptime, transações analisad
 GET /api/v1/alerts
 ```
 Lista todos os alertas com paginação, filtros por severidade e ordenação por timestamp.
+
+#### Análise de Transação Individual
+```
+POST /api/v1/analyze/transaction
+```
+Analisa uma transação específica. Suporte a campos opcionais `fundeddate_from`/`fundeddate_to` para análise precisa de carteiras novas.
 
 #### Status do Sistema
 ```

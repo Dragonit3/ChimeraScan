@@ -132,9 +132,16 @@ POST /api/v1/analyze/transaction
   "to_address": "string",
   "transaction_type": "TRANSFER|SWAP|MINT|BURN|APPROVAL|CONTRACT_INTERACTION",
   "token_address": "string",
-  "token_amount": "number"
+  "token_amount": "number",
+  "fundeddate_from": "string (ISO 8601)",
+  "fundeddate_to": "string (ISO 8601)"
 }
 ```
+
+**Campos para Análise de Carteira Nova**:
+- `fundeddate_from`: Data de início do funding da carteira (opcional)
+- `fundeddate_to`: Data final do funding da carteira (opcional)
+- Estes campos são usados pela regra `new_wallet_interaction` para determinar a idade real da carteira
 
 **Exemplo de Requisição**:
 ```json
@@ -147,6 +154,22 @@ POST /api/v1/analyze/transaction
   "timestamp": "2025-08-22T13:15:30Z",
   "block_number": 23197704,
   "transaction_type": "TRANSFER"
+}
+```
+
+**Exemplo com Análise de Carteira Nova**:
+```json
+{
+  "hash": "0x1234567890abcdef1234567890abcdef12345678",
+  "from_address": "0x742d35Cc631C0532925a3b8D33C9",
+  "to_address": "0xF977814e90dA44bFA03b6295", 
+  "value": 5000.0,
+  "gas_price": 25.0,
+  "timestamp": "2025-08-22T13:15:30Z",
+  "block_number": 23197704,
+  "transaction_type": "TRANSFER",
+  "fundeddate_from": "2025-08-22T01:00:00Z",
+  "fundeddate_to": "2025-08-22T02:00:00Z"
 }
 ```
 

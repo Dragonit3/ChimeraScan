@@ -66,7 +66,7 @@ def print_banner():
     banner = """
     ╔══════════════════════════════════════════════════════════╗
     ║                                                          ║
-    ║           🛡️  ChimeraScan System              ║
+    ║                🛡️  ChimeraScan System                    ║
     ║                                                          ║
     ║    Sistema de Detecção de Fraudes em Ativos Tokenizados  ║
     ║                        v1.0.0                            ║

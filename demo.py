@@ -14,7 +14,7 @@ BASE_URL = "http://localhost:5000"
 def create_sample_transactions():
     """Cria transações de exemplo para demonstração"""
     
-    # Transação normal
+    # Transação normal - carteira antiga (não deve disparar alerta)
     normal_tx = {
         "hash": "0x1234567890abcdef1234567890abcdef12345678901234567890abcdef12345678",
         "from_address": "0x742d35cc6671c3f5c32cf8e0f4f85b1e4f8c8c1a",
@@ -23,7 +23,8 @@ def create_sample_transactions():
         "gas_price": 25.0,  # Gas normal
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "block_number": 18500000,
-        "transaction_type": "TRANSFER"
+        "transaction_type": "TRANSFER",
+        "fundeddate_from": (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z"  # Carteira de 30 dias
     }
     
     # Transação suspeita - Alto valor
@@ -35,22 +36,24 @@ def create_sample_transactions():
         "gas_price": 30.0,
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "block_number": 18500001,
-        "transaction_type": "TRANSFER"
+        "transaction_type": "TRANSFER",
+        "fundeddate_from": (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"  # Carteira de 7 dias
     }
     
-    # Transação suspeita - Horário + Gas alto
+    # Transação suspeita - Carteira MUITO nova + Valor alto (deve disparar new_wallet_interaction)
     suspicious_tx = {
         "hash": "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
         "from_address": "0xsuspicious1234567890abcdef1234567890abcdef",
         "to_address": "0xnewwallet1234567890abcdef1234567890abcdef",
-        "value": 50000.0,  # $50k
+        "value": 50000.0,  # $50k - acima do threshold de $1k
         "gas_price": 150.0,  # GAS MUITO ALTO
         "timestamp": (datetime.utcnow().replace(hour=2, minute=30)).isoformat() + "Z",  # 2:30 AM
         "block_number": 18500002,
-        "transaction_type": "TRANSFER"
+        "transaction_type": "TRANSFER",
+        "fundeddate_from": (datetime.utcnow() - timedelta(hours=8)).isoformat() + "Z"  # Carteira de 8 horas (< 24h threshold)
     }
     
-    # Transação crítica - Múltiplos fatores
+    # Transação crítica - Múltiplos fatores + carteira nova
     critical_tx = {
         "hash": "0xcritical1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
         "from_address": "0x1234567890abcdef1234567890abcdef12345678",  # Endereço na blacklist simulada
@@ -59,7 +62,8 @@ def create_sample_transactions():
         "gas_price": 200.0,  # Gas extremamente alto
         "timestamp": (datetime.utcnow().replace(hour=3, minute=0)).isoformat() + "Z",  # 3:00 AM - horário suspeito
         "block_number": 18500003,
-        "transaction_type": "TRANSFER"
+        "transaction_type": "TRANSFER",
+        "fundeddate_from": (datetime.utcnow() - timedelta(hours=2)).isoformat() + "Z"  # Carteira de apenas 2 horas
     }
     
     return [normal_tx, high_value_tx, suspicious_tx, critical_tx]
@@ -196,7 +200,7 @@ def main():
     print("""
     ╔══════════════════════════════════════════════════════════╗
     ║                                                          ║
-    ║           🛡️  ChimeraScan Demo                 ║
+    ║                🛡️  ChimeraScan Demo                      ║
     ║                                                          ║
     ║         Demonstração do Sistema de Detecção              ║
     ║              de Fraudes em Blockchain                    ║

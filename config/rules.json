@@ -10,10 +10,10 @@
     "new_wallet_interaction": {
       "enabled": true,
       "wallet_age_hours": 24,
-      "min_value_usd": 1000,
+      "min_value_usd": 500,
       "severity": "MEDIUM",
       "description": "Interação com carteira muito nova",
-      "action": "review_required"
+      "action": "immediate_alert"
     },
     "suspicious_gas_price": {
       "enabled": true,
