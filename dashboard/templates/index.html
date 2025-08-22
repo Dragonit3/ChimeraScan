@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChimeraScan - Sistema de Detecção de Fraudes</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="ChimeraScan"> ChimeraScan
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span class="status-text">Sistema Online</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container">
+            <ul class="nav-links">
+                <li><a href="#dashboard" class="active">Dashboard</a></li>
+                <li><a href="#alerts">Alertas</a></li>
+                <li><a href="#transactions">Transações</a></li>
+                <li><a href="#rules">Regras</a></li>
+                <li><a href="#analytics">Análises</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Metrics Overview -->
+        <section class="dashboard">
+            <!-- Total Transactions -->
+            <div class="card metric-card" id="total-analyzed">
+                <div class="card-header">
+                    <h3 class="card-title">Transações Analisadas</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+                <div class="metric-value">0</div>
+                <div class="metric-label">Últimas 24h</div>
+            </div>
+
+            <!-- Suspicious Transactions -->
+            <div class="card metric-card" id="suspicious-detected">
+                <div class="card-header">
+                    <h3 class="card-title">Transações Suspeitas</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <div class="metric-value">0</div>
+                <div class="metric-label">Detectadas</div>
+            </div>
+
+            <!-- Alerts Generated -->
+            <div class="card metric-card" id="alerts-generated">
+                <div class="card-header">
+                    <h3 class="card-title">Alertas Gerados</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM11.5 6H2v8h9.5V6zM21 10h-4.5V2h4.5v8z"></path>
+                    </svg>
+                </div>
+                <div class="metric-value">0</div>
+                <div class="metric-label">Total</div>
+            </div>
+
+            <!-- Suspicious Rate -->
+            <div class="card metric-card" id="suspicious-rate">
+                <div class="card-header">
+                    <h3 class="card-title">Taxa de Detecção</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="metric-value">0.0%</div>
+                <div class="metric-label">Suspeitas</div>
+            </div>
+
+            <!-- System Uptime -->
+            <div class="card metric-card" id="uptime-hours">
+                <div class="card-header">
+                    <h3 class="card-title">Tempo Online</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="metric-value">0.0h</div>
+                <div class="metric-label">Sistema</div>
+            </div>
+
+            <!-- Risk Score Chart -->
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h3 class="card-title">Score de Risco - Tempo Real</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div class="chart-container">
+                    <div id="risk-score-chart"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Alerts -->
+        <section class="dashboard">
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h3 class="card-title">Alertas Recentes</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM11.5 6H2v8h9.5V6zM21 10h-4.5V2h4.5v8z"></path>
+                    </svg>
+                </div>
+                <div id="recent-alerts">
+                    <div class="loading"></div>
+                </div>
+            </div>
+
+            <!-- Alerts Distribution -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Distribuição por Severidade</h3>
+                </div>
+                <div class="chart-container">
+                    <div id="alerts-chart"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Active Rules and Transaction Volume -->
+        <section class="dashboard">
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h3 class="card-title">Regras Ativas</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div id="active-rules">
+                    <div class="loading"></div>
+                </div>
+            </div>
+
+            <!-- Transaction Volume -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Volume de Transações</h3>
+                </div>
+                <div class="chart-container">
+                    <div id="transaction-volume-chart"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- System Information -->
+        <section class="dashboard">
+            <div class="card" style="grid-column: span 3;">
+                <div class="card-header">
+                    <h3 class="card-title">Informações do Sistema</h3>
+                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div>
+                        <h4>Versão</h4>
+                        <p class="text-secondary">1.0.0</p>
+                    </div>
+                    <div>
+                        <h4>Blockchain</h4>
+                        <p class="text-secondary">Ethereum Mainnet</p>
+                    </div>
+                    <div>
+                        <h4>Tokens Suportados</h4>
+                        <p class="text-secondary">USDC, DAI, BRL1</p>
+                    </div>
+                    <div>
+                        <h4>Último Update</h4>
+                        <p class="text-secondary" id="last-update">--</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+    <script>
+        // Atualizar timestamp do último update
+        setInterval(() => {
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString('pt-BR');
+        }, 1000);
+    </script>
+</body>
+</html>

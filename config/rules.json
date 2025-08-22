@@ -1,0 +1,108 @@
+{
+  "institutional_rules": {
+    "high_value_transfer": {
+      "enabled": true,
+      "threshold_usd": 10000,
+      "severity": "HIGH",
+      "description": "Transferência de alto valor detectada",
+      "action": "immediate_alert"
+    },
+    "new_wallet_interaction": {
+      "enabled": true,
+      "wallet_age_hours": 24,
+      "min_value_usd": 1000,
+      "severity": "MEDIUM",
+      "description": "Interação com carteira muito nova",
+      "action": "review_required"
+    },
+    "suspicious_gas_price": {
+      "enabled": true,
+      "multiplier": 3.0,
+      "severity": "LOW",
+      "description": "Gas price suspeito (muito alto ou muito baixo)",
+      "action": "log_for_analysis"
+    },
+    "wash_trading_pattern": {
+      "enabled": false,
+      "time_window_minutes": 5,
+      "min_transactions": 3,
+      "value_similarity_threshold": 0.95,
+      "severity": "HIGH",
+      "description": "Padrão de wash trading detectado",
+      "action": "immediate_alert"
+    },
+    "blacklist_interaction": {
+      "enabled": false,
+      "severity": "CRITICAL",
+      "description": "Interação com endereço na lista negra",
+      "action": "block_transaction"
+    },
+    "unusual_time_pattern": {
+      "enabled": false,
+      "off_hours_threshold": "22:00-06:00",
+      "weekend_enabled": true,
+      "min_value_usd": 50000,
+      "severity": "MEDIUM",
+      "description": "Transação em horário incomum",
+      "action": "review_required"
+    },
+    "token_swap_anomaly": {
+      "enabled": false,
+      "price_deviation_threshold": 0.1,
+      "volume_spike_multiplier": 10.0,
+      "severity": "HIGH",
+      "description": "Anomalia em swap de tokens",
+      "action": "immediate_alert"
+    },
+    "multiple_small_transfers": {
+      "enabled": false,
+      "time_window_minutes": 10,
+      "min_count": 10,
+      "max_individual_value_usd": 9999,
+      "total_threshold_usd": 50000,
+      "severity": "MEDIUM",
+      "description": "Múltiplas transferências pequenas (possível evasão)",
+      "action": "review_required"
+    }
+  },
+  "risk_scoring": {
+    "factors": {
+      "wallet_age": {
+        "weight": 0.15,
+        "new_threshold_hours": 168
+      },
+      "transaction_frequency": {
+        "weight": 0.20,
+        "normal_daily_range": [1, 50]
+      },
+      "value_patterns": {
+        "weight": 0.25,
+        "round_number_penalty": 0.1
+      },
+      "time_patterns": {
+        "weight": 0.15,
+        "off_hours_penalty": 0.2
+      },
+      "network_analysis": {
+        "weight": 0.25,
+        "known_bad_actors_penalty": 0.8
+      }
+    },
+    "thresholds": {
+      "low_risk": 0.3,
+      "medium_risk": 0.6,
+      "high_risk": 0.8,
+      "critical_risk": 0.95
+    }
+  },
+  "monitoring": {
+    "block_polling_interval": 15,
+    "mempool_monitoring": true,
+    "gas_price_tracking": true,
+    "dex_monitoring": {
+      "uniswap_v3": true,
+      "sushiswap": true,
+      "curve": true
+    }
+  }
+}

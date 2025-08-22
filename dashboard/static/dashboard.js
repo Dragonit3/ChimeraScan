@@ -1,0 +1,574 @@
+// ChimeraScan Dashboard JavaScript
+
+class FraudDashboard {
+    constructor() {
+        this.isConnected = false;
+        this.updateInterval = 5000; // 5 segundos
+        this.charts = {};
+        this.init();
+    }
+
+    async init() {
+        console.log('Initializing ChimeraScan Dashboard...');
+        
+        // Verificar conexão com API
+        await this.checkConnection();
+        
+        // Inicializar componentes
+        this.initializeCharts();
+        this.startRealTimeUpdates();
+        this.bindEventListeners();
+        
+        // Carregar dados iniciais
+        await this.loadDashboardData();
+        
+        // Atualizar a cada 3 segundos
+        setInterval(() => this.loadDashboardData(), 3000);
+        
+        console.log('Dashboard initialized successfully');
+    }
+
+    async checkConnection() {
+        try {
+            const response = await fetch('/health');
+            const data = await response.json();
+            
+            if (data.status === 'healthy') {
+                this.isConnected = true;
+                this.updateConnectionStatus(true);
+            } else {
+                throw new Error('API not healthy');
+            }
+        } catch (error) {
+            console.error('Connection check failed:', error);
+            this.isConnected = false;
+            this.updateConnectionStatus(false);
+        }
+    }
+
+    updateConnectionStatus(connected) {
+        const statusDot = document.querySelector('.status-dot');
+        const statusText = document.querySelector('.status-text');
+        
+        if (statusDot && statusText) {
+            if (connected) {
+                statusDot.style.backgroundColor = '#10b910ff'; // green
+                statusText.textContent = 'Sistema Online';
+            } else {
+                statusDot.style.backgroundColor = '#ef4444'; // red
+                statusText.textContent = 'Sistema Offline';
+            }
+        }
+    }
+
+    async loadDashboardData() {
+        try {
+            // Carregar estatísticas
+            await this.loadStats();
+            
+            // Carregar alertas recentes
+            await this.loadRecentAlerts();
+            
+            // Carregar regras ativas
+            await this.loadActiveRules();
+            
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            this.showError('Erro ao carregar dados do dashboard');
+        }
+    }
+
+    async loadStats() {
+        try {
+            // Usar endpoint de métricas em tempo real
+            const response = await fetch('/api/v1/metrics/realtime');
+            const data = await response.json();
+            
+            this.updateStatsCards(data);
+            this.updateChartsData(data);
+            
+        } catch (error) {
+            console.error('Error loading stats:', error);
+            // Se falhar, usar dados zerados
+            this.updateStatsCards({});
+        }
+    }
+
+    updateStatsCards(data) {
+        // Usar dados reais da API de métricas em tempo real
+        
+        // Total de transações analisadas
+        this.updateMetricCard('total-analyzed', data.transactions_analyzed || 0);
+        
+        // Transações suspeitas
+        this.updateMetricCard('suspicious-detected', data.suspicious_detected || 0);
+        
+        // Alertas gerados
+        this.updateMetricCard('alerts-generated', data.total_alerts || 0);
+        
+        // Taxa de suspeitos
+        const detectionRate = data.detection_rate ? (data.detection_rate * 100).toFixed(1) : '0.0';
+        this.updateMetricCard('suspicious-rate', detectionRate + '%');
+        
+        // Tempo online (converter segundos para horas)
+        const uptimeHours = data.uptime_seconds ? (data.uptime_seconds / 3600).toFixed(1) : '0.0';
+        this.updateMetricCard('uptime-hours', uptimeHours + 'h');
+    }
+
+    updateMetricCard(cardId, value, change = null) {
+        const card = document.getElementById(cardId);
+        if (card) {
+            const valueElement = card.querySelector('.metric-value');
+            if (valueElement) {
+                valueElement.textContent = value;
+                
+                // Adicionar animação de atualização
+                valueElement.classList.add('updated');
+                setTimeout(() => valueElement.classList.remove('updated'), 1000);
+            }
+            
+        }
+    }
+
+    async loadRecentAlerts() {
+        try {
+            // Usar endpoint real de alertas
+            const response = await fetch('/api/v1/alerts');
+            
+            if (response.status === 200) {
+                const data = await response.json();
+                this.renderAlerts(data.alerts || []);
+                // Atualizar gráfico de distribuição por severidade
+                this.updateAlertsChart(data.alerts || []);
+            } else {
+                // Se não houver alertas ou erro, começar com lista vazia
+                this.renderAlerts([]);
+                this.updateAlertsChart([]);
+            }
+            
+        } catch (error) {
+            console.error('Error loading alerts:', error);
+            // Se falhar, começar com lista vazia
+            this.renderAlerts([]);
+            this.updateAlertsChart([]);
+        }
+    }
+
+    renderAlerts(alerts) {
+        const alertsContainer = document.getElementById('recent-alerts');
+        if (!alertsContainer) return;
+
+        if (alerts.length === 0) {
+            alertsContainer.innerHTML = '<p class="text-center text-secondary">Nenhum alerta recente</p>';
+            return;
+        }
+
+        // Pegar apenas os 5 alertas mais recentes para exibição
+        const recentAlerts = alerts.slice(0, 5);
+
+        const alertsHtml = recentAlerts.map(alert => `
+            <div class="alert-card card ${alert.severity.toLowerCase()}" data-alert-id="${alert.id}">
+                <div class="alert-title">${alert.title}</div>
+                <div class="alert-description">${alert.description || 'undefined'}</div>
+                <div class="alert-meta">
+                    <span>Hash: <code>${alert.transaction_hash}</code></span>
+                    <span class="risk-score">Score: ${alert.risk_score ? alert.risk_score.toFixed(3) : 'N/A'}</span>
+                </div>
+                <div class="alert-meta mt-1">
+                    <span>${this.formatTime(alert.detected_at || alert.created_at)}</span>
+                    <span class="badge badge-${alert.severity.toLowerCase()}">${alert.severity}</span>
+                </div>
+            </div>
+        `).join('');
+
+        alertsContainer.innerHTML = alertsHtml;
+    }
+
+    updateAlertsChart(alerts) {
+        if (!this.charts.alerts || typeof Plotly === 'undefined') return;
+
+        // Contar alertas por severidade
+        const severityCounts = {
+            'CRITICAL': 0,
+            'HIGH': 0,
+            'MEDIUM': 0,
+            'LOW': 0
+        };
+
+        alerts.forEach(alert => {
+            const severity = alert.severity.toUpperCase();
+            if (severityCounts.hasOwnProperty(severity)) {
+                severityCounts[severity]++;
+            }
+        });
+
+        const data = [{
+            x: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+            y: [severityCounts.CRITICAL, severityCounts.HIGH, severityCounts.MEDIUM, severityCounts.LOW],
+            type: 'bar',
+            marker: {
+                color: ['#dc2626', '#ef4444', '#f59e0b', '#10b981']
+            }
+        }];
+
+        const layout = {
+            title: 'Distribuição de Alertas por Severidade',
+            xaxis: { title: 'Severidade' },
+            yaxis: { title: 'Quantidade' },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#f9fafb' },
+            height: 430,
+        };
+
+        // Usar react em vez de redraw para maior confiabilidade
+        Plotly.react(this.charts.alerts, data, layout, { responsive: true });
+    }
+
+    async loadActiveRules() {
+        try {
+            const response = await fetch('/api/v1/rules');
+            const data = await response.json();
+            
+            // Usar regras configuradas para mostrar todas (ativas + pendentes)
+            this.renderActiveRules(data.configured_rules || []);
+            
+            // Log para debug
+            console.log('Rules loaded:', {
+                active: data.total_active,
+                configured: data.total_configured,
+                implementation_status: data.implementation_status
+            });
+            
+        } catch (error) {
+            console.error('Error loading rules:', error);
+        }
+    }
+
+    renderActiveRules(rules) {
+        const rulesContainer = document.getElementById('active-rules');
+        if (!rulesContainer) return;
+
+        if (rules.length === 0) {
+            rulesContainer.innerHTML = '<p class="text-center text-secondary">Nenhuma regra ativa</p>';
+            return;
+        }
+
+        const rulesHtml = `
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Regra</th>
+                        <th>Severidade</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rules.map(rule => `
+                        <tr>
+                            <td>
+                                <strong>${rule.name.replace(/_/g, ' ').toUpperCase()}</strong>
+                                <br>
+                                <small class="text-secondary">${rule.description}</small>
+                            </td>
+                            <td><span class="badge badge-${rule.severity.toLowerCase()}">${rule.severity}</span></td>
+                            <td>
+                                <span class="badge ${this.getStatusBadgeClass(rule.status)}">
+                                    ${rule.status === 'ACTIVE' ? 'ATIVA' : rule.status === 'CONFIGURED' ? 'CONFIGURADA' : 'INATIVA'}
+                                </span>
+                                ${rule.implemented ? 
+                                    '<small class="text-success">✓ Implementada</small>' : 
+                                    '<small class="text-warning">⚠ Pendente</small>'}
+                            </td>
+                            <td><small class="text-secondary">${rule.action}</small></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        rulesContainer.innerHTML = rulesHtml;
+    }
+
+    getStatusBadgeClass(status) {
+        switch(status) {
+            case 'ACTIVE': return 'badge-low';
+            case 'CONFIGURED': return 'badge-medium';
+            default: return 'badge-secondary';
+        }
+    }
+
+    initializeCharts() {
+        // Inicializar gráficos com Plotly.js (se disponível)
+        if (typeof Plotly !== 'undefined') {
+            this.initRiskScoreChart();
+            this.initAlertsChart();
+            this.initTransactionVolumeChart();
+        }
+    }
+
+    initRiskScoreChart() {
+        const chartElement = document.getElementById('risk-score-chart');
+        if (!chartElement) return;
+
+        // Gerar labels de tempo para os últimos 20 pontos (1 minuto)
+        const timeLabels = this.generateRecentTimeLabels(20);
+        
+        // Iniciar com dados zerados
+        const data = [{
+            x: timeLabels,
+            y: new Array(20).fill(0), // Começar zerado
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Risk Score',
+            line: { color: '#F2C744' }, // Amarelo dourado
+            marker: { size: 4, color: '#F2C744' }
+        }];
+
+        const layout = {
+            title: 'Risk Score ao Longo do Tempo',
+            autosize: true,
+            xaxis: { 
+                title: 'Tempo',
+                fixedrange: true // Impedir zoom no eixo X
+            },
+            yaxis: { 
+                title: 'Risk Score', 
+                range: [0, 1],
+                fixedrange: true // Impedir zoom no eixo Y
+            },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#f9fafb' },
+            margin: { t: 50, r: 30, b: 80, l: 60 }
+        };
+
+        Plotly.newPlot(chartElement, data, layout, { 
+            responsive: true,
+            displayModeBar: false // Remover barra de ferramentas
+        });
+        this.charts.riskScore = chartElement;
+    }
+
+    initAlertsChart() {
+        const chartElement = document.getElementById('alerts-chart');
+        if (!chartElement) return;
+
+        // Iniciar com dados zerados
+        const data = [{
+            x: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+            y: [0, 0, 0, 0], // Começar zerado
+            type: 'bar',
+            marker: {
+                color: ['#dc2626', '#ef4444', '#f59e0b', '#10b981']
+            }
+        }];
+
+        const layout = {
+            title: 'Distribuição de Alertas por Severidade',
+            xaxis: { title: 'Severidade' },
+            yaxis: { title: 'Quantidade' },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#f9fafb' }
+        };
+
+        Plotly.newPlot(chartElement, data, layout, { responsive: true });
+        this.charts.alerts = chartElement;
+    }
+
+    initTransactionVolumeChart() {
+        const chartElement = document.getElementById('transaction-volume-chart');
+        if (!chartElement) return;
+
+        // Gerar labels de tempo para os últimos 15 pontos (45 segundos)
+        const timeLabels = this.generateRecentTimeLabels(15);
+        
+        // Iniciar com dados zerados
+        const data = [{
+            x: timeLabels,
+            y: new Array(15).fill(0), // Começar zerado
+            type: 'scatter',
+            mode: 'lines',
+            fill: 'tonexty',
+            fillcolor: 'rgba(242, 199, 68, 0.2)', // Amarelo dourado com transparência
+            line: { color: '#F2C744' } // Amarelo dourado
+        }];
+
+        const layout = {
+            title: 'Volume de Transações',
+            xaxis: { 
+                title: 'Tempo',
+                fixedrange: true
+            },
+            yaxis: { 
+                title: 'Transações',
+                fixedrange: true
+            },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#f9fafb' },
+            margin: { t: 50, r: 30, b: 80, l: 60 }
+        };
+
+        Plotly.newPlot(chartElement, data, layout, { 
+            responsive: true,
+            displayModeBar: false
+        });
+        this.charts.transactionVolume = chartElement;
+    }
+
+    updateChartsData(data) {
+        // Atualizar gráfico de risk score com janela fixa de tempo
+        if (this.charts.riskScore && typeof Plotly !== 'undefined' && data.average_risk_score !== undefined) {
+            const currentTime = new Date();
+            const timeLabel = currentTime.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            // Obter dados atuais do gráfico
+            const currentData = this.charts.riskScore.data[0];
+            
+            // Adicionar novo ponto
+            const newX = [...currentData.x, timeLabel];
+            const newY = [...currentData.y, data.average_risk_score];
+            
+            // Manter apenas os últimos 20 pontos (aproximadamente 1 minuto com updates a cada 3s)
+            const maxPoints = 20;
+            const finalX = newX.slice(-maxPoints);
+            const finalY = newY.slice(-maxPoints);
+            
+            // Atualizar o gráfico com dados fixos
+            Plotly.restyle(this.charts.riskScore, {
+                x: [finalX],
+                y: [finalY]
+            }, [0]);
+        }
+
+        // Atualizar gráfico de volume de transações com janela fixa
+        if (this.charts.transactionVolume && typeof Plotly !== 'undefined' && data.transactions_analyzed !== undefined) {
+            const currentTime = new Date();
+            const timeLabel = currentTime.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            // Obter dados atuais do gráfico
+            const currentData = this.charts.transactionVolume.data[0];
+            
+            // Adicionar novo ponto
+            const newX = [...currentData.x, timeLabel];
+            const newY = [...currentData.y, data.transactions_analyzed];
+            
+            // Manter apenas os últimos 15 pontos (aproximadamente 45 segundos)
+            const maxPoints = 15;
+            const finalX = newX.slice(-maxPoints);
+            const finalY = newY.slice(-maxPoints);
+            
+            // Atualizar o gráfico com dados fixos
+            Plotly.restyle(this.charts.transactionVolume, {
+                x: [finalX],
+                y: [finalY]
+            }, [0]);
+        }
+    }
+
+    startRealTimeUpdates() {
+        // Atualizar dados a cada intervalo
+        setInterval(async () => {
+            if (this.isConnected) {
+                await this.loadDashboardData();
+            } else {
+                await this.checkConnection();
+            }
+        }, this.updateInterval);
+    }
+
+    bindEventListeners() {
+        // Event listeners para interações do usuário
+        document.addEventListener('click', (e) => {
+            // Handler para cliques em alertas
+            if (e.target.closest('.alert-card')) {
+                const alertCard = e.target.closest('.alert-card');
+                const alertId = alertCard.dataset.alertId;
+                this.showAlertDetails(alertId);
+            }
+        });
+    }
+
+    showAlertDetails(alertId) {
+        // Mostrar detalhes do alerta em modal
+        console.log('Showing details for alert:', alertId);
+        // Implementar modal ou painel de detalhes
+    }
+
+    showError(message) {
+        // Mostrar mensagem de erro
+        console.error(message);
+        // Implementar sistema de notificações
+    }
+
+    // Funções utilitárias
+    formatTime(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'agora';
+        if (diffMins < 60) return `${diffMins}min atrás`;
+        if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h atrás`;
+        return date.toLocaleDateString('pt-BR');
+    }
+
+    generateTimeLabels(count) {
+        const labels = [];
+        const now = new Date();
+        for (let i = count - 1; i >= 0; i--) {
+            const time = new Date(now - i * 60000);
+            labels.push(time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+        }
+        return labels;
+    }
+
+    generateRecentTimeLabels(count) {
+        const labels = [];
+        const now = new Date();
+        // Gerar labels de tempo com intervalo de 3 segundos (frequência de atualização)
+        for (let i = count - 1; i >= 0; i--) {
+            const time = new Date(now - i * 3000); // 3 segundos entre cada ponto
+            labels.push(time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
+        return labels;
+    }
+
+    generateRandomData(count, min, max) {
+        return Array.from({ length: count }, () => 
+            Math.random() * (max - min) + min
+        );
+    }
+}
+
+// Inicializar dashboard quando página carregar
+document.addEventListener('DOMContentLoaded', () => {
+    window.fraudDashboard = new FraudDashboard();
+});
+
+// Adicionar CSS para animação de atualização
+const style = document.createElement('style');
+style.textContent = `
+    .metric-value.updated {
+        animation: pulse-update 1s ease-in-out;
+    }
+    
+    @keyframes pulse-update {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); color: #F2C744; } /* Amarelo dourado */
+        100% { transform: scale(1); }
+    }
+`;
+document.head.appendChild(style);
