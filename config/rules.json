@@ -38,7 +38,7 @@
       "action": "block_transaction"
     },
     "unusual_time_pattern": {
-      "enabled": false,
+      "enabled": true,
       "off_hours_threshold": "22:00-06:00",
       "weekend_enabled": true,
       "min_value_usd": 50000,
