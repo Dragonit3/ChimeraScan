@@ -1,0 +1,8 @@
+# Arquivos de ambiente
+.env
+
+# Banco de dados local
+fraud_detection.db
+
+# Logs de execução
+fraud_detection.log
