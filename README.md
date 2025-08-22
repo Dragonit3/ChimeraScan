@@ -95,22 +95,18 @@ fraud-detection-system/
 pip install -r requirements.txt
 ```
 
-#### Opção 1: Sistema Completo (Recomendado)
-```bash
-python run_complete_system.py
-```
-#### Opção 2: Componentes Separados
+#### Componentes Separados
 ```bash
 # Terminal 1: Servidor principal
-python main.py
+python start.py
 
-# Terminal 2: Monitor de transações (modo simulação)
+# Terminal Opção 1: Monitor de transações (modo simulação)
 python continuous_monitor.py
 
-# Terminal 3: Monitor com dados reais da blockchain
+# Terminal Opção 2: Monitor com dados reais da blockchain
 python continuous_monitor.py --mode real
 
-# Terminal 4: Demonstração de dados
+# Terminal Opção 3: Demonstração de dados
 python demo.py
 ```
 
@@ -119,9 +115,6 @@ python demo.py
 # Configurar variáveis de ambiente primeiro
 cp .env.example .env
 # Editar .env com suas chaves de API
-
-# Executar monitor em modo real
-python continuous_monitor.py --mode real --interval 5.0
 ```
 
 #### Acesso ao Dashboard
