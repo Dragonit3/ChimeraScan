@@ -52,7 +52,8 @@ class AlertManager(IAlertManager):
     def __init__(self):
         self.notification_rules = self._load_notification_rules()
         self.alert_queue = asyncio.Queue()
-        self.active_alerts = {}
+        self.active_alerts = {}  # Agora será: tx_hash -> [lista de alertas]
+        self.stored_alerts = []  # Lista linear de todos os alertas
         self.notification_history = []
         self.rate_limiter = {}
         
@@ -116,15 +117,36 @@ class AlertManager(IAlertManager):
             self.stats["total_alerts"] += 1
             self.stats["alerts_by_severity"][alert.severity.value] += 1
             
-            # Armazenar alerta ativo
-            self.active_alerts[alert.transaction_hash] = {
+            # Criar entrada para stored_alerts (lista linear)
+            alert_dict = {
+                "id": f"{alert.transaction_hash}_{alert.rule_name}_{len(self.stored_alerts)}",
+                "transaction_hash": alert.transaction_hash,
+                "rule_name": alert.rule_name,
+                "severity": alert.severity.value,
+                "title": alert.title,
+                "description": alert.description,
+                "risk_score": alert.risk_score,
+                "wallet_address": alert.wallet_address,
+                "context_data": alert.context_data,
+                "created_at": datetime.utcnow(),
+                "status": "active"
+            }
+            
+            # Adicionar à lista linear de alertas
+            self.stored_alerts.append(alert_dict)
+            
+            # Armazenar alerta ativo (permitindo múltiplos alertas por transação)
+            if alert.transaction_hash not in self.active_alerts:
+                self.active_alerts[alert.transaction_hash] = []
+            
+            self.active_alerts[alert.transaction_hash].append({
                 "alert": alert,
                 "created_at": datetime.utcnow(),
                 "status": "active",
                 "notifications_sent": 0
-            }
+            })
             
-            logger.info(f"Alert processed: {alert.rule_name} - {alert.severity.value}")
+            logger.info(f"Alert processed: {alert.rule_name} - {alert.severity.value} for tx {alert.transaction_hash[:10]}...")
             return True
             
         except Exception as e:
@@ -391,31 +413,62 @@ _{alert.description}_
                 await asyncio.sleep(1)
     
     def get_active_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Retorna alertas ativos"""
+        """Retorna alertas ativos (agora suportando múltiplos alertas por transação)"""
         active_list = []
         
-        for tx_hash, alert_info in list(self.active_alerts.items())[-limit:]:
-            active_list.append({
-                "transaction_hash": tx_hash,
-                "rule_name": alert_info["alert"].rule_name,
-                "severity": alert_info["alert"].severity.value,
-                "title": alert_info["alert"].title,
-                "risk_score": alert_info["alert"].risk_score,
-                "created_at": alert_info["created_at"].isoformat(),
-                "status": alert_info["status"]
-            })
+        # Percorrer todas as transações com alertas
+        for tx_hash, alert_list in self.active_alerts.items():
+            # Cada transação pode ter múltiplos alertas
+            for alert_info in alert_list:
+                alert_dict = {
+                    "id": f"{tx_hash}_{alert_info['alert'].rule_name}",
+                    "transaction_hash": tx_hash,
+                    "rule_name": alert_info["alert"].rule_name,
+                    "severity": alert_info["alert"].severity.value,
+                    "title": alert_info["alert"].title,
+                    "description": alert_info["alert"].description,
+                    "risk_score": alert_info["alert"].risk_score,
+                    "created_at": alert_info["created_at"].isoformat(),
+                    "detected_at": alert_info["created_at"].isoformat(),
+                    "status": alert_info["status"],
+                    # Informações adicionais da transação
+                    "wallet_address": alert_info["alert"].wallet_address,
+                    "context_data": alert_info["alert"].context_data or {}
+                }
+                
+                # Incluir informações de transação do contexto se disponível
+                context = alert_info["alert"].context_data or {}
+                if context:
+                    alert_dict.update({
+                        "transaction_value": context.get("transaction_value"),
+                        "from_address": context.get("from_address"),
+                        "to_address": context.get("to_address"),
+                        "fundeddate_from": context.get("fundeddate_from"),
+                        "fundeddate_to": context.get("fundeddate_to"),
+                        "wallet_age_hours": context.get("wallet_age_hours"),
+                        "gas_price": context.get("gas_price"),
+                        "block_number": context.get("block_number")
+                    })
+                
+                active_list.append(alert_dict)
         
-        return sorted(active_list, key=lambda x: x["created_at"], reverse=True)
+        # Ordenar por data de criação (mais recentes primeiro) e limitar
+        sorted_alerts = sorted(active_list, key=lambda x: x["created_at"], reverse=True)
+        return sorted_alerts[:limit]
     
     def get_stats(self) -> Dict[str, Any]:
         """Retorna estatísticas do sistema de alertas"""
         uptime = (datetime.utcnow() - self.stats["start_time"]).total_seconds()
         
+        # Contar total de alertas ativos (considerando múltiplos por transação)
+        total_active_alerts = sum(len(alert_list) for alert_list in self.active_alerts.values())
+        
         return {
             **self.stats,
             "uptime_hours": uptime / 3600,
             "alerts_per_hour": (self.stats["total_alerts"] / uptime * 3600) if uptime > 0 else 0,
-            "active_alerts_count": len(self.active_alerts),
+            "active_alerts_count": total_active_alerts,
+            "transactions_with_alerts": len(self.active_alerts),
             "notification_success_rate": (
                 self.stats["notifications_sent"] / 
                 (self.stats["notifications_sent"] + self.stats["failed_notifications"])

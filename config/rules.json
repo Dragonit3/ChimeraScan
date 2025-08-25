@@ -32,7 +32,7 @@
       "action": "immediate_alert"
     },
     "blacklist_interaction": {
-      "enabled": false,
+      "enabled": true,
       "severity": "CRITICAL",
       "description": "Interação com endereço na lista negra",
       "action": "block_transaction"

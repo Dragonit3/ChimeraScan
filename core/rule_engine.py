@@ -433,7 +433,15 @@ class RuleEngine(IRuleEngine):
         # Lista negra simulada - seria consulta a base de dados real
         blacklisted_addresses = {
             "0x1234567890abcdef1234567890abcdef12345678",  # Exemplo
-            "0xabcdef1234567890abcdef1234567890abcdef12"   # Exemplo
+            "0xabcdef1234567890abcdef1234567890abcdef12",   # Exemplo
+            "0xd4648f90A20f5bbBFFEEb0d6E7C62C9396174F2b",
+            "0xdAFC4ab80F48FdE24591aA4412a9d924EaDc0a58",
+            "0x42C529af2f7c1FE094501a9986E6723733154b82",
+            "0xcfAf9660251648a3723f21172e2A4D1257b2b372",
+            "0x7751C71663A22CF8375eA1d259640bbc46db63a7",
+            "0xDe87b67Cc523270F896Fa9C7c3B21e287101567d",
+            "0x00d9fE085D99B33Ab2AAE8063180c63E23bF2E69",
+            "0x455bF23eA7575A537b6374953FA71B5F3653272c"
         }
         return address.lower() in {addr.lower() for addr in blacklisted_addresses}
     

@@ -97,6 +97,22 @@ class FraudDetector(IFraudDetector):
                     triggered_rules.append(rule_result.rule_name)
                     
                     if rule_result.generate_alert:
+                        # Enriquecer contexto do alerta com dados da transação
+                        enriched_context = {
+                            **rule_result.context,
+                            # Dados da transação original
+                            "transaction_value": transaction.value,
+                            "from_address": transaction.from_address,
+                            "to_address": transaction.to_address,
+                            "gas_price": transaction.gas_price,
+                            "block_number": transaction.block_number,
+                            "timestamp": transaction.timestamp.isoformat(),
+                            # Dados de funding se disponíveis
+                            "fundeddate_from": transaction.fundeddate_from.isoformat() if transaction.fundeddate_from else None,
+                            "fundeddate_to": transaction.fundeddate_to.isoformat() if transaction.fundeddate_to else None,
+                            "has_real_funding_data": transaction.fundeddate_from is not None or transaction.fundeddate_to is not None
+                        }
+                        
                         alert = AlertData(
                             rule_name=rule_result.rule_name,
                             severity=rule_result.severity,
@@ -105,7 +121,7 @@ class FraudDetector(IFraudDetector):
                             description=rule_result.alert_description,
                             risk_score=risk_score,
                             wallet_address=transaction.from_address,
-                            context_data=rule_result.context
+                            context_data=enriched_context
                         )
                         alerts.append(alert)
             

@@ -157,8 +157,8 @@ class BlockchainProvider:
         """Gera transações simuladas (código original)"""
         # Tipos de transações com probabilidades diferentes
         transaction_types = [
-            {"type": "normal", "prob": 0.70, "value_range": (10, 5000)},
-            {"type": "high_value", "prob": 0.15, "value_range": (50000, 200000)},
+            {"type": "normal", "prob": 0.65, "value_range": (10, 5000)},
+            {"type": "high_value", "prob": 0.20, "value_range": (50000, 200000)},
             {"type": "suspicious", "prob": 0.10, "value_range": (1000, 50000)},
             {"type": "critical", "prob": 0.05, "value_range": (500000, 2000000)}
         ]
@@ -197,8 +197,8 @@ class BlockchainProvider:
         addresses = [
             "0x742d35Cc631C0532925a3b8D33C9", "0xF977814e90dA44bFA03b6295",
             "0x28C6c06298d514Db089934071355", "0xBE0eB53F46cd790Cd13851d5",
-            "0x8315177aB297bA92A06054cE80a67ED4", "0x47ac0Fb4F2D84898e4D9E7b4",
-            "0xC02aaA39b223FE8D0A0e5C4F27eAD9", "0xdAC17F958D2ee523a2206206994597"
+            "0x8315177aB297bA92A06054cE80a67ED4", "0xcfAf9660251648a3723f21172e2A4D1257b2b372",
+            "0x28C6c06298d514Db089934071312", "0x00d9fE085D99B33Ab2AAE8063180c63E23bF2E69"
         ]
         
         from_address = random.choice(addresses)
@@ -513,13 +513,8 @@ class ContinuousMonitor:
     def eth_to_usd(self, eth_amount: float) -> float:
         """Converte valor de ETH para USD"""
         if self.eth_price_usd is None:
-            return eth_amount * 2500.0  # Fallback
+            return eth_amount * 4620.0  # Fallback
         return eth_amount * self.eth_price_usd
-    
-    def generate_realistic_transaction(self) -> Dict:
-        """Método depreciado - usar blockchain_provider.get_simulated_transactions()"""
-        logger.warning("generate_realistic_transaction() está depreciado, use blockchain_provider")
-        return None
     
     async def analyze_transaction(self, transaction: Dict) -> Dict:
         """Envia transação para análise na API"""

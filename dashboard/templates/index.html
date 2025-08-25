@@ -199,6 +199,101 @@
         </section>
     </main>
 
+    <!-- Modal para detalhes do alerta -->
+    <div id="alert-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Detalhes do Alerta</h2>
+                <span class="close" onclick="closeAlertModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="alert-detail-section">
+                    <h3>Informações do Alerta</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <label>Regra:</label>
+                            <span id="modal-rule-name">--</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Severidade:</label>
+                            <span id="modal-severity" class="badge">--</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Risk Score:</label>
+                            <span id="modal-risk-score">--</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Detectado em:</label>
+                            <span id="modal-detected-at">--</span>
+                        </div>
+                    </div>
+                    <div class="detail-item full-width">
+                        <label>Descrição:</label>
+                        <p id="modal-description">--</p>
+                    </div>
+                </div>
+
+                <div class="alert-detail-section">
+                    <h3>Informações da Transação</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <label>Hash:</label>
+                            <span id="modal-tx-hash" class="monospace">--</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Valor:</label>
+                            <span id="modal-tx-value">--</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Gas Price:</label>
+                            <span id="modal-gas-price">--</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Block:</label>
+                            <span id="modal-block-number">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert-detail-section">
+                    <h3>Informações das Carteiras</h3>
+                    <div class="wallet-info">
+                        <div class="wallet-section">
+                            <h4>From Address</h4>
+                            <div class="detail-grid">
+                                <div class="detail-item full-width">
+                                    <label>Endereço:</label>
+                                    <span id="modal-from-address" class="monospace">--</span>
+                                </div>
+                                <div class="detail-item">
+                                    <label>Funded Date:</label>
+                                    <span id="modal-fundeddate-from">--</span>
+                                </div>
+                                <div class="detail-item">
+                                    <label>Idade:</label>
+                                    <span id="modal-wallet-age">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="wallet-section">
+                            <h4>To Address</h4>
+                            <div class="detail-grid">
+                                <div class="detail-item full-width">
+                                    <label>Endereço:</label>
+                                    <span id="modal-to-address" class="monospace">--</span>
+                                </div>
+                                <div class="detail-item">
+                                    <label>Funded Date:</label>
+                                    <span id="modal-fundeddate-to">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
     <script>

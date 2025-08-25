@@ -1,297 +1,226 @@
-# ChimeraScan System
-## Sistema de Detecção de Fraudes em Ativos Tokenizados
+# 🛡️ ChimeraScan
+## Sistema de Detecção de Fraudes em Blockchain Ethereum
 
-### 🎯 Objetivo
-Detectar e mitigar fraudes em transações de ativos tokenizados na blockchain Ethereum, com foco em aplicações institucionais. Sistema completo com dashboard em tempo real, alertas automáticos e API REST para integração.
+Sistema enterprise de detecção de fraudes em tempo real para transações Ethereum, com dashboard interativo, alertas automáticos e ferramentas de análise manual.
 
-### 🏗️ Arquitetura
-- **Separation of Concerns**: Módulos independentes para monitoramento, detecção, alertas
-- **Real-time Dashboard**: Interface web com atualizações em tempo real
-- **Escalabilidade**: Arquitetura preparada para alto volume de transações
-- **Manutenibilidade**: Código modular e documentado
-- **Adaptabilidade**: Regras customizáveis por instituição
-- **Performance**: Cache, processamento assíncrono e otimizações
+## ⚡ Quick Start
 
-### 📁 Estrutura do Projeto
-```
-fraud-detection-system/
-├── core/                    # Core business logic
-│   ├── __init__.py
-│   ├── fraud_detector.py    # Motor principal de detecção
-│   ├── rule_engine.py       # Engine de regras customizáveis
-│   └── risk_scorer.py       # Sistema de pontuação de risco
-├── blockchain/              # Integração blockchain
-│   ├── __init__.py
-│   └── ethereum_monitor.py  # Monitor de transações Ethereum
-├── detection/               # Algoritmos de detecção (pasta vazia - expansão futura)
-├── alerts/                  # Sistema de alertas
-│   ├── __init__.py
-│   └── alert_manager.py     # Gerenciamento de alertas
-├── data/                    # Camada de dados
-│   ├── __init__.py
-│   └── models.py            # Modelos de dados (TransactionData, AlertData)
-├── dashboard/               # Dashboard web
-│   ├── static/
-│   │   ├── dashboard.js     # JavaScript do dashboard
-│   │   └── styles.css       # Estilos CSS
-│   └── templates/
-│       └── index.html       # Template principal
-├── config/                  # Configurações
-│   ├── __init__.py
-│   ├── settings.py          # Configurações gerais
-│   └── rules.json           # Regras de detecção
-├── main.py                  # Aplicação Flask principal
-├── continuous_monitor.py    # Monitor contínuo de transações
-├── demo.py                  # Demonstração do sistema
-├── start.py                 # Script de inicialização
-├── run_complete_system.py   # Executor do sistema completo
-├── test_api.py             # Testes da API
-├── .env.example            # Exemplo de variáveis de ambiente
-└── requirements.txt        # Dependências
-```
-
-### 🚀 Funcionalidades Implementadas
-1. **Dashboard em Tempo Real**: 
-   - Métricas de sistema (uptime, transações analisadas, alertas)
-   - Gráficos de risk score e volume de transações em tempo real
-   - Lista de alertas recentes com scroll automático
-   - Distribuição de alertas por severidade
-
-2. **Monitoramento Contínuo**: 
-   - **Modo Simulação**: Geração de transações realísticas para demonstração
-   - **Modo Real**: Integração com blockchain Ethereum via Infura/Alchemy
-   - Processamento de blocos reais em tempo real
-   - Análise de transações da mainnet Ethereum
-   - Suporte a APIs Etherscan para informações detalhadas
-
-3. **Sistema de Alertas**: 
-   - Classificação automática por severidade (LOW, MEDIUM, HIGH, CRITICAL)
-   - Armazenamento persistente de alertas
-   - API REST para consulta de alertas
-
-4. **API REST Completa**:
-   - `/health` - Status do sistema
-   - `/api/v1/metrics/realtime` - Métricas em tempo real
-   - `/api/v1/alerts` - Lista de alertas
-   - `/api/v1/stats` - Estatísticas gerais
-
-5. **Engine de Detecção**:
-   - Análise de risco baseada em múltiplos fatores
-   - Regras customizáveis via JSON
-   - Pontuação de risco de 0.0 a 1.0
-   - **Análise de Carteira Nova**: Suporte a `fundeddate_from`/`fundeddate_to` para detecção precisa de interações com carteiras recém-criadas
-
-### 🔧 Tecnologias Utilizadas
-- **Backend**: Python 3.8+, Flask 2.x, SQLAlchemy
-- **Database**: SQLite (desenvolvimento), PostgreSQL (produção)
-- **Frontend**: HTML5, CSS3, JavaScript (Vanilla), Plotly.js
-- **Blockchain**: Web3.py, simulação de dados Ethereum
-- **Logs**: Structlog para logging estruturado
-- **Cache**: Redis (configurado, não utilizado no demo)
-
-### 🚀 Como Executar
-
-#### Pré-requisitos
+### 1. Instalação
 ```bash
+git clone <repo>
+cd ChimeraScan-Challange
 pip install -r requirements.txt
 ```
 
-#### Componentes Separados
+### 2. Executar Sistema Completo
 ```bash
-# Terminal 1: Servidor principal
+# Inicia API + Dashboard
 python start.py
+```
+**Dashboard**: http://localhost:5000
 
-# Terminal Opção 1: Monitor de transações (modo simulação)
+### 3. Iniciar Monitoramento
+```bash
+# Em terminal separado - Modo demonstração
 python continuous_monitor.py
 
-# Terminal Opção 2: Monitor com dados reais da blockchain
+# OU Modo blockchain real (requer API keys)
 python continuous_monitor.py --mode real
-
-# Terminal Opção 3: Demonstração de dados
-python demo.py
 ```
 
-#### Opção 3: Modo Real com Blockchain
+## 🎯 Funcionalidades Principais
+
+### ✅ Dashboard em Tempo Real
+- **Métricas**: Uptime, transações analisadas, alertas gerados
+- **Gráficos**: Risk score e volume em tempo real com Plotly.js
+- **Alertas**: Lista interativa com popup detalhado
+- **Múltiplos Alertas**: Suporte a vários alertas por transação
+
+### ✅ Sistema de Detecção
+- **Carteiras Novas**: Detecta carteiras criadas recentemente (`fundeddate`)
+- **Alto Valor**: Transações acima de $10,000 USD
+- **Blacklist**: Endereços suspeitos pré-cadastrados
+- **Risk Score**: Pontuação 0.0-1.0 baseada em múltiplos fatores
+
+### ✅ Blockchain Real
+- **Etherscan API**: Dados reais de funding de carteiras
+- **Infura**: Monitoramento de blocos Ethereum em tempo real
+- **Fallback**: Retorna para simulação se APIs falharem
+
+### ✅ Ferramenta de Análise Manual
 ```bash
-# Configurar variáveis de ambiente primeiro
-cp .env.example .env
-# Editar .env com suas chaves de API
+# Analisador interativo (passo-a-passo)
+python manual_transaction_analyzer.py
 ```
 
-#### Acesso ao Dashboard
-- **URL**: http://localhost:5000
-- **Health Check**: http://localhost:5000/health
-- **API Docs**: Consultar endpoints na seção de funcionalidades
+## 📋 API Endpoints
 
-### 📊 Endpoints da API
-
-#### Métricas em Tempo Real
-```
-GET /api/v1/metrics/realtime
-```
-Retorna métricas atualizadas do sistema incluindo uptime, transações analisadas, alertas gerados e scores de risco.
-
-#### Alertas do Sistema  
-```
-GET /api/v1/alerts
-```
-Lista todos os alertas com paginação, filtros por severidade e ordenação por timestamp.
-
-#### Análise de Transação Individual
-```
+### Análise de Transação
+```bash
 POST /api/v1/analyze/transaction
-```
-Analisa uma transação específica. Suporte a campos opcionais `fundeddate_from`/`fundeddate_to` para análise precisa de carteiras novas.
+Content-Type: application/json
 
-#### Status do Sistema
+{
+  "transaction_hash": "0x123...",
+  "from_address": "0xabc...",
+  "to_address": "0xdef...",
+  "value_usd": 15000,
+  "gas_price_gwei": 35.2,
+  "fundeddate_from": "2025-08-24T23:10:00Z",
+  "fundeddate_to": "2025-08-24T20:00:00Z"
+}
 ```
+
+### Consultar Alertas
+```bash
+GET /api/v1/alerts
+GET /api/v1/metrics/realtime
 GET /health
 ```
-Verifica se todos os componentes estão funcionando corretamente.
 
-### 🔧 Configuração
+## 🔧 Configuração
 
-#### Variáveis de Ambiente
-Copie `.env.example` para `.env` e configure:
+### Modo Real (Blockchain)
 ```bash
+# 1. Copiar arquivo de configuração
 cp .env.example .env
+
+# 2. Configurar APIs (gratuitas)
+# Infura: https://infura.io/
+INFURA_URL=https://mainnet.infura.io/v3/SEU_PROJECT_ID
+
+# Etherscan: https://etherscan.io/apis
+ETHERSCAN_API_KEY=SUA_API_KEY
+
+# 3. Executar com dados reais
+python continuous_monitor.py --mode real
 ```
 
-**Para Modo Real de Blockchain:**
-```bash
-# Obtenha chave gratuita em https://infura.io/
-INFURA_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID
-
-# Obtenha chave gratuita em https://etherscan.io/apis  
-ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY
+### Personalizar Regras
+Edite `config/rules.json`:
+```json
+{
+  "high_value_threshold_usd": 10000,
+  "new_wallet_threshold_hours": 24,
+  "blacklisted_addresses": [
+    "0x1234567890abcdef1234567890abcdef12345678"
+  ]
+}
 ```
 
-#### Personalização de Regras
-Edite `config/rules.json` para customizar regras de detecção por instituição.
+## 📊 Exemplos de Uso
 
-### � Integração com Blockchain Real
-
-#### Modos de Operação
-
-**🎭 Modo Simulação (Padrão)**
-- Gera transações realísticas para demonstração
-- Ideal para desenvolvimento e testes
-- Não requer chaves de API externas
-
-**🌐 Modo Real**  
-- Conecta com a blockchain Ethereum mainnet
-- Processa transações reais em tempo real
-- Requer chaves de API (Infura + Etherscan)
-
-#### Configuração para Modo Real
-
-1. **Obter Chave Infura (Gratuita)**:
-   - Visite https://infura.io/
-   - Crie conta e projeto
-   - Copie o Project ID
-
-2. **Obter Chave Etherscan (Gratuita)**:
-   - Visite https://etherscan.io/apis
-   - Crie conta
-   - Gere API key gratuita
-
-3. **Configurar .env**:
-   ```bash
-   INFURA_URL=https://mainnet.infura.io/v3/SEU_PROJECT_ID
-   ETHERSCAN_API_KEY=SUA_API_KEY
-   ```
-
-4. **Executar Modo Real**:
-   ```bash
-   python continuous_monitor.py --mode real
-   ```
-
-#### Características do Modo Real
-
-- **Latência**: ~12-15 segundos entre blocos (tempo natural do Ethereum)
-- **Volume**: Processa até 5 transações por bloco
-- **Limitação**: 3 blocos por ciclo para evitar rate limits
-- **Fallback**: Retorna automaticamente ao modo simulação se APIs falharem
-- **Logs Detalhados**: Mostra valores em ETH e Gwei reais
-
-### �🏗️ Arquitetura do Sistema
-
-O sistema segue uma arquitetura modular com separação clara de responsabilidades:
-
-- **Core**: Lógica principal de detecção de fraudes
-- **Blockchain**: Integração e monitoramento de blockchain  
-- **Alerts**: Gerenciamento e classificação de alertas
-- **Data**: Modelos de dados e persistência
-- **Dashboard**: Interface web responsiva
-- **Config**: Configurações centralizadas
-
-### 📈 Características Técnicas
-
-- **Real-time Updates**: Dashboard atualiza a cada 3 segundos
-- **Fixed Time Windows**: Gráficos mantêm janelas de tempo consistentes
-- **Responsive Design**: Interface adaptável a diferentes tamanhos de tela
-- **Error Handling**: Tratamento robusto de erros e logging
-- **Modular Architecture**: Facilita manutenção e expansão
-- **SQLite Integration**: Persistência local para desenvolvimento
-- **Async Processing**: Processamento assíncrono de transações
-
-### 🐛 Troubleshooting
-
-#### Problemas Comuns
-
-**Erro: "Port 5000 already in use"**
+### Análise Manual - Interativa
 ```bash
-# Encontrar processo usando a porta
+python manual_transaction_analyzer.py
+
+# Interface guiada:
+# Hash: 0xtest123
+# From: 0x1234567890abcdef1234567890abcdef12345678
+# To: 0x9876543210fedcba9876543210fedcba98765432
+# Valor: 15000
+# Gas: 35.2
+```
+
+### Análise Manual - Linha de Comando
+```bash
+# Transação com alto valor
+python quick_analyzer.py 0xtest123 \
+  0x1234567890abcdef1234567890abcdef12345678 \
+  15000 \
+  --to 0x9876543210fedcba9876543210fedcba98765432 \
+  --gas 35.2
+
+# Resultado:
+# 📊 RESULTADO:
+#    Suspeita: ✅ NÃO
+#    Risk Score: 0.341
+#    Alertas: 3
+# 🚨 ALERTAS DETECTADOS:
+#    🟠 High Value Transfer: $15,000.00 (HIGH)
+#    🟡 New Wallet Interaction: 3.4h old (MEDIUM)
+#    🔴 Blacklisted Address Interaction (CRITICAL)
+```
+
+## 📁 Estrutura do Projeto
+
+```
+ChimeraScan/
+├── core/                    # Lógica de detecção
+│   ├── fraud_detector.py    # Engine principal
+│   ├── rule_engine.py       # Regras customizáveis
+│   └── risk_scorer.py       # Pontuação de risco
+├── blockchain/              # Integração blockchain
+│   └── ethereum_monitor.py  # Monitor Ethereum
+├── alerts/                  # Sistema de alertas
+│   └── alert_manager.py     # Gerenciador de alertas
+├── dashboard/               # Interface web
+│   ├── static/             
+│   │   ├── dashboard.js     # Frontend JavaScript
+│   │   └── styles.css       # Estilos CSS
+│   └── templates/
+│       └── index.html       # Dashboard HTML
+├── config/                  # Configurações
+│   ├── rules.json          # Regras de detecção
+│   └── settings.py         # Configurações gerais
+├── data/                    # Modelos de dados
+│   └── models.py           # SQLAlchemy models
+├── start.py                 # Inicialização
+├── continuous_monitor.py    # Monitor contínuo
+├── manual_transaction_analyzer.py  # Análise manual interativa
+```
+
+## 🔍 Tipos de Alertas
+
+| Severidade | Tipo | Descrição | Threshold |
+|------------|------|-----------|-----------|
+| 🟠 **HIGH** | High Value Transfer | Transações de alto valor | ≥ $10,000 |
+| 🟡 **MEDIUM** | New Wallet Interaction | Carteiras criadas recentemente | ≤ 24h |
+| 🔴 **CRITICAL** | Blacklisted Address | Endereços na blacklist | Imediato |
+
+## 🛠️ Tecnologias
+
+- **Backend**: Python 3.12, Flask, SQLAlchemy
+- **Frontend**: HTML5, CSS3, JavaScript, Plotly.js
+- **Blockchain**: Web3.py, Etherscan API, Infura
+- **Database**: SQLite
+- **Logs**: Estruturados com timestamps
+
+## 📈 Dashboard Features
+
+- **⏱️ Real-time**: Atualização a cada 3 segundos
+- **📊 Gráficos**: Risk score e volume de transações
+- **🚨 Alertas**: Lista interativa com detalhes
+- **📱 Responsivo**: Funciona em mobile e desktop
+- **🔍 Modal**: Popup com informações detalhadas da transação
+
+## 🚨 Troubleshooting
+
+### Problemas Comuns
+
+**Porta 5000 ocupada**
+```bash
 netstat -ano | findstr :5000
-# Matar processo se necessário
 taskkill /PID <PID> /F
 ```
 
+**Modo real não funciona**
+```bash
+# Verificar configuração
+python -c "import os; print('INFURA_URL:', os.getenv('INFURA_URL', 'NÃO CONFIGURADO'))"
+
+# Testar manualmente
+python quick_analyzer.py 0xtest 0x1234567890abcdef1234567890abcdef12345678 1000
+```
+
 **Dashboard não atualiza**
-- Verifique se `continuous_monitor.py` está rodando
-- Confirme que a API `/api/v1/metrics/realtime` retorna dados
-- Verifique console do browser para erros JavaScript
+- Verificar se `continuous_monitor.py` está rodando
+- Checar console do browser (F12) para erros JavaScript
+- Testar endpoint: http://localhost:5000/api/v1/metrics/realtime
 
-**Banco de dados não encontrado**
-- O sistema cria automaticamente `fraud_detection.db`
-- Verifique permissões de escrita na pasta do projeto
+## 📝 Documentação Adicional
+- **API**: `API_DOCUMENTATION.md`
 
-**Alertas não aparecem**
-- Execute `python demo.py` para gerar dados de teste
-- Verifique logs do sistema para erros
+---
 
-**Modo Real não funciona**
-- Verifique se INFURA_URL está configurado no arquivo .env
-- Confirme que a chave da API está válida
-- Sistema fará fallback automático para modo simulação se houver problemas
-- Use `python continuous_monitor.py --mode real` para forçar modo real
-
-**Transações reais muito lentas**
-- Blocos Ethereum são gerados a cada ~12-15 segundos
-- Use `--interval 10` para intervalos maiores em modo real
-- Sistema processa até 3 blocos por ciclo para evitar sobrecarga
-
-### 📝 Desenvolvimento
-
-#### Estrutura de Commits
-- `feat:` Nova funcionalidade
-- `fix:` Correção de bug  
-- `docs:` Documentação
-- `refactor:` Refatoração de código
-- `test:` Testes
-
-#### Expansões Futuras
-- [x] **Integração com APIs reais de blockchain** ✅ **IMPLEMENTADO**
-  - Suporte a Infura/Alchemy para dados reais da Ethereum
-  - Integração com Etherscan API
-  - Monitoramento de blocos em tempo real
-  - Fallback automático para modo simulação
-- [ ] Configurar Corretamente a Regra de Blackllist
-- [ ] Machine Learning para detecção de anomalias
-- [ ] Notificações por email/webhook
-- [ ] Autenticação e autorização
-- [ ] Deploy em containers Docker
-- [ ] Monitoramento com Prometheus/Grafana
-
-### 📄 Licença
-Este projeto foi desenvolvido como demonstração técnica para o TecBan Challenge.
+**Desenvolvido para TecBan Challenge 2025**

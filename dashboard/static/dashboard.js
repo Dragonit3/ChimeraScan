@@ -167,21 +167,29 @@ class FraudDashboard {
         const recentAlerts = alerts.slice(0, 5);
 
         const alertsHtml = recentAlerts.map(alert => `
-            <div class="alert-card card ${alert.severity.toLowerCase()}" data-alert-id="${alert.id}">
+            <div class="alert-card card ${alert.severity.toLowerCase()}" 
+                 data-alert-id="${alert.id}" 
+                 onclick="dashboard.showAlertDetails('${alert.id}')">
                 <div class="alert-title">${alert.title}</div>
                 <div class="alert-description">${alert.description || 'undefined'}</div>
                 <div class="alert-meta">
-                    <span>Hash: <code>${alert.transaction_hash}</code></span>
+                    <span>Hash: <code>${alert.transaction_hash.substring(0, 10)}...</code></span>
                     <span class="risk-score">Score: ${alert.risk_score ? alert.risk_score.toFixed(3) : 'N/A'}</span>
                 </div>
                 <div class="alert-meta mt-1">
                     <span>${this.formatTime(alert.detected_at || alert.created_at)}</span>
                     <span class="badge badge-${alert.severity.toLowerCase()}">${alert.severity}</span>
                 </div>
+                <div class="click-hint" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    Clique para ver detalhes
+                </div>
             </div>
         `).join('');
 
         alertsContainer.innerHTML = alertsHtml;
+        
+        // Armazenar dados dos alertas para uso no modal
+        this.alertsData = alerts;
     }
 
     updateAlertsChart(alerts) {
@@ -551,11 +559,73 @@ class FraudDashboard {
             Math.random() * (max - min) + min
         );
     }
+
+    showAlertDetails(alertId) {
+        const alert = this.alertsData.find(a => a.id === alertId);
+        if (!alert) {
+            console.error('Alert not found:', alertId);
+            return;
+        }
+
+        // Preencher o modal com os dados do alerta
+        document.getElementById('modal-title').textContent = `Alerta: ${alert.title}`;
+        document.getElementById('modal-rule-name').textContent = alert.rule_name;
+        document.getElementById('modal-severity').textContent = alert.severity;
+        document.getElementById('modal-severity').className = `badge badge-${alert.severity.toLowerCase()}`;
+        document.getElementById('modal-risk-score').textContent = alert.risk_score ? alert.risk_score.toFixed(4) : 'N/A';
+        document.getElementById('modal-detected-at').textContent = this.formatTime(alert.detected_at);
+        document.getElementById('modal-description').textContent = alert.description || 'Sem descrição';
+
+        // Informações da transação
+        document.getElementById('modal-tx-hash').textContent = alert.transaction_hash || 'N/A';
+        document.getElementById('modal-tx-value').textContent = alert.transaction_value ? 
+            `$${Number(alert.transaction_value).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'N/A';
+        document.getElementById('modal-gas-price').textContent = alert.gas_price ? 
+            `${alert.gas_price} Gwei` : 'N/A';
+        document.getElementById('modal-block-number').textContent = alert.block_number || 'N/A';
+
+        // Informações das carteiras
+        document.getElementById('modal-from-address').textContent = alert.from_address || 'N/A';
+        document.getElementById('modal-to-address').textContent = alert.to_address || 'N/A';
+        
+        // Datas de funding
+        document.getElementById('modal-fundeddate-from').textContent = alert.fundeddate_from ? 
+            this.formatTime(alert.fundeddate_from) : 'N/A';
+        document.getElementById('modal-fundeddate-to').textContent = alert.fundeddate_to ? 
+            this.formatTime(alert.fundeddate_to) : 'N/A';
+        
+        // Idade da carteira
+        document.getElementById('modal-wallet-age').textContent = alert.wallet_age_hours ? 
+            `${alert.wallet_age_hours.toFixed(1)} horas` : 'N/A';
+
+        // Mostrar o modal
+        document.getElementById('alert-modal').style.display = 'block';
+    }
 }
+
+// Funções globais para o modal
+function closeAlertModal() {
+    document.getElementById('alert-modal').style.display = 'none';
+}
+
+// Fechar modal ao clicar fora dele
+window.onclick = function(event) {
+    const modal = document.getElementById('alert-modal');
+    if (event.target === modal) {
+        closeAlertModal();
+    }
+}
+
+// Fechar modal com tecla ESC
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeAlertModal();
+    }
+});
 
 // Inicializar dashboard quando página carregar
 document.addEventListener('DOMContentLoaded', () => {
-    window.fraudDashboard = new FraudDashboard();
+    window.dashboard = new FraudDashboard();
 });
 
 // Adicionar CSS para animação de atualização
