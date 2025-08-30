@@ -450,11 +450,71 @@ _{alert.description}_
                         "block_number": context.get("block_number")
                     })
                 
+                # Se for um alerta de blacklist, adicionar informações do banco de dados
+                if alert_info["alert"].rule_name == "blacklist_interaction":
+                    context = alert_info["alert"].context_data or {}
+                    
+                    # Verificar se há múltiplos endereços blacklistados
+                    if context.get("multiple_addresses", False):
+                        blacklisted_addresses = context.get("blacklisted_addresses", [])
+                        blacklist_infos = []
+                        
+                        for addr_info in blacklisted_addresses:
+                            blacklist_info = self._get_blacklist_info_sync(addr_info["address"])
+                            if blacklist_info:
+                                blacklist_info["interaction_type"] = addr_info["interaction_type"]
+                                blacklist_info["address"] = addr_info["address"]
+                                blacklist_infos.append(blacklist_info)
+                        
+                        if blacklist_infos:
+                            alert_dict["blacklist_infos"] = blacklist_infos  # Lista de informações
+                            alert_dict["multiple_blacklists"] = True
+                    else:
+                        # Caso tradicional de um único endereço
+                        primary_address = context.get("blacklisted_address") or alert_info["alert"].wallet_address
+                        blacklist_info = self._get_blacklist_info_sync(primary_address)
+                        if blacklist_info:
+                            alert_dict["blacklist_info"] = blacklist_info
+                            alert_dict["multiple_blacklists"] = False
+                
                 active_list.append(alert_dict)
         
         # Ordenar por data de criação (mais recentes primeiro) e limitar
         sorted_alerts = sorted(active_list, key=lambda x: x["created_at"], reverse=True)
         return sorted_alerts[:limit]
+    
+    def _get_blacklist_info_sync(self, address: str) -> Optional[Dict[str, Any]]:
+        """Obtém informações de blacklist de forma síncrona para uso no get_active_alerts"""
+        try:
+            # Import aqui para evitar dependências circulares
+            from core.blacklist_manager import get_blacklist_database
+            import asyncio
+            
+            # Executar função async de forma síncrona
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                blacklist_db = get_blacklist_database()
+                blacklist_entry = loop.run_until_complete(blacklist_db.get_blacklist_info(address))
+                
+                if blacklist_entry:
+                    return {
+                        "address_type": blacklist_entry.address_type.value,
+                        "severity_level": blacklist_entry.severity_level.value,
+                        "reason": blacklist_entry.reason,
+                        "source": blacklist_entry.source,
+                        "created_at": blacklist_entry.created_at.isoformat(),
+                        "notes": blacklist_entry.notes
+                    }
+            finally:
+                loop.close()
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting blacklist info for {address}: {e}")
+            return None
     
     def get_stats(self) -> Dict[str, Any]:
         """Retorna estatísticas do sistema de alertas"""

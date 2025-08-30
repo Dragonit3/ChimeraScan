@@ -215,21 +215,46 @@ class RuleEngine(IRuleEngine):
         if transaction.to_address:
             addresses_to_check.append(transaction.to_address)
         
+        blacklisted_addresses = []
+        
         for address in addresses_to_check:
             if await self._is_blacklisted(address):
-                return RuleResult(
-                    rule_name="blacklist_interaction",
-                    triggered=True,
-                    severity=RiskLevel(rule_config["severity"]),
-                    confidence=1.0,
-                    alert_title="Blacklisted Address Interaction",
-                    alert_description=f"Transaction involves blacklisted address: {address}",
-                    context={
-                        "blacklisted_address": address,
-                        "interaction_type": "from" if address == transaction.from_address else "to"
-                    },
-                    generate_alert=True  # Sempre gera alerta para lista negra
-                )
+                interaction_type = "from" if address == transaction.from_address else "to"
+                blacklisted_addresses.append({
+                    "address": address,
+                    "interaction_type": interaction_type
+                })
+        
+        # Se encontrou endereços blacklistados, criar alerta
+        if blacklisted_addresses:
+            # Determinar título e descrição baseado na quantidade
+            if len(blacklisted_addresses) == 1:
+                addr = blacklisted_addresses[0]
+                title = "Blacklisted Address Interaction"
+                description = f"Transaction involves blacklisted address: {addr['address']} ({addr['interaction_type']})"
+                primary_address = addr["address"]
+            else:
+                addresses_str = ", ".join([f"{addr['address']} ({addr['interaction_type']})" for addr in blacklisted_addresses])
+                title = "Multiple Blacklisted Addresses Interaction"
+                description = f"Transaction involves multiple blacklisted addresses: {addresses_str}"
+                primary_address = blacklisted_addresses[0]["address"]  # Usar primeiro para compatibilidade
+            
+            return RuleResult(
+                rule_name="blacklist_interaction",
+                triggered=True,
+                severity=RiskLevel(rule_config["severity"]),
+                confidence=1.0,
+                alert_title=title,
+                alert_description=description,
+                context={
+                    "blacklisted_addresses": blacklisted_addresses,
+                    "blacklisted_address": primary_address,  # Manter compatibilidade
+                    "interaction_type": blacklisted_addresses[0]["interaction_type"],  # Manter compatibilidade
+                    "multiple_addresses": len(blacklisted_addresses) > 1,
+                    "total_blacklisted": len(blacklisted_addresses)
+                },
+                generate_alert=True  # Sempre gera alerta para lista negra
+            )
         
         return None
     
@@ -429,21 +454,35 @@ class RuleEngine(IRuleEngine):
         return 25.0  # 25 Gwei
     
     async def _is_blacklisted(self, address: str) -> bool:
-        """Verifica se endereço está na lista negra"""
-        # Lista negra simulada - seria consulta a base de dados real
-        blacklisted_addresses = {
-            "0x1234567890abcdef1234567890abcdef12345678",  # Exemplo
-            "0xabcdef1234567890abcdef1234567890abcdef12",   # Exemplo
-            "0xd4648f90A20f5bbBFFEEb0d6E7C62C9396174F2b",
-            "0xdAFC4ab80F48FdE24591aA4412a9d924EaDc0a58",
-            "0x42C529af2f7c1FE094501a9986E6723733154b82",
-            "0xcfAf9660251648a3723f21172e2A4D1257b2b372",
-            "0x7751C71663A22CF8375eA1d259640bbc46db63a7",
-            "0xDe87b67Cc523270F896Fa9C7c3B21e287101567d",
-            "0x00d9fE085D99B33Ab2AAE8063180c63E23bF2E69",
-            "0x455bF23eA7575A537b6374953FA71B5F3653272c"
-        }
-        return address.lower() in {addr.lower() for addr in blacklisted_addresses}
+        """
+        Verifica se endereço está na lista negra usando banco de dados
+        Fallback para lista hardcoded se banco não estiver disponível
+        """
+        try:
+            # Tentar consulta no banco de dados primeiro
+            from core.blacklist_manager import get_blacklist_database
+            
+            blacklist_db = get_blacklist_database()
+            is_blacklisted = await blacklist_db.is_address_blacklisted(address)
+            
+            if is_blacklisted:
+                # Log informações adicionais se encontrado
+                blacklist_info = await blacklist_db.get_blacklist_info(address)
+                if blacklist_info:
+                    logger.info(f"Blacklist hit: {address} - {blacklist_info.severity_level.value} - {blacklist_info.reason}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.warning(f"Blacklist database unavailable, using fallback list: {e}")
+            
+            # Fallback para lista hardcoded se banco não estiver disponível
+            blacklisted_addresses = {
+                "0x1234567890abcdef1234567890abcdef12345678",  # Exemplo
+            }
+            
+            return address.lower() in {addr.lower() for addr in blacklisted_addresses}
     
     async def _get_token_price_deviation(self, token_address: str) -> float:
         """

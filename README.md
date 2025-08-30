@@ -39,8 +39,14 @@ python continuous_monitor.py --mode real
 ### ✅ Sistema de Detecção
 - **Carteiras Novas**: Detecta carteiras criadas recentemente (`fundeddate`)
 - **Alto Valor**: Transações acima de $10,000 USD
-- **Blacklist**: Endereços suspeitos pré-cadastrados
+- **Blacklist Database**: Sistema completo de blacklist com SQLite
 - **Risk Score**: Pontuação 0.0-1.0 baseada em múltiplos fatores
+
+### ✅ Banco de Dados de Blacklist
+- **SQLite**: Banco persistente para endereços suspeitos
+- **Gerenciador Interativo**: Menu completo para administração
+- **Múltiplos Tipos**: WALLET, CONTRACT, EXCHANGE, MIXER
+- **Severidade**: LOW, MEDIUM, HIGH, CRITICAL com fallback automático
 
 ### ✅ Blockchain Real
 - **Etherscan API**: Dados reais de funding de carteiras
@@ -92,8 +98,27 @@ INFURA_URL=https://mainnet.infura.io/v3/SEU_PROJECT_ID
 # Etherscan: https://etherscan.io/apis
 ETHERSCAN_API_KEY=SUA_API_KEY
 
+# Blacklist Database: https://etherscan.io/apis
+DATABASE_BLOCK_URL=sqlite:///blocklist.db
+
 # 3. Executar com dados reais
 python continuous_monitor.py --mode real
+```
+
+### Gerenciar Blacklist
+```bash
+# Gerenciador interativo de blacklist
+python manage_blacklist.py
+
+# Opções disponíveis:
+# 1. Criar novo banco de blacklist
+# 2. Conectar a banco existente
+# 3. Listar endereços na blacklist
+# 4. Buscar endereço específico
+# 5. Adicionar endereço à blacklist
+# 6. Remover endereço da blacklist
+# 7. Ver estatísticas
+# 8. Inicializar dados de exemplo
 ```
 
 ### Personalizar Regras

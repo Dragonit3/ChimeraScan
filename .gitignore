@@ -6,3 +6,6 @@ fraud_detection.db
 
 # Logs de execução
 fraud_detection.log
+
+# Banco de dados de blacklist
+blocklist.db
