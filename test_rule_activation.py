@@ -15,6 +15,7 @@ Regras testadas:
 3. New Wallet Interaction (MEDIUM)
 4. Suspicious Gas Price (LOW)
 5. Unusual Time Pattern (MEDIUM)
+6. Multiple Small Transfers (MEDIUM)
 
 Autor: ChimeraScan Team
 Data: 2025-08-30
@@ -182,6 +183,22 @@ class RuleTestFramework:
                         rule_name = alert.get('rule_name', 'unknown')
                         severity = alert.get('severity', 'unknown')
                         print(f"     - {rule_name}: {severity}")
+                        
+            elif test_result.rule_name == "multiple_small_transfers":
+                print(f"\n🔧 DEBUG MULTIPLE SMALL TRANSFERS:")
+                if test_result.api_response and 'context' in test_result.api_response:
+                    context = test_result.api_response['context']
+                    print(f"   Transaction Value: ${context.get('individual_value', 0):,.2f}")
+                    print(f"   Threshold: ${context.get('threshold', 9999):,.2f}")
+                    print(f"   Pattern Type: {context.get('pattern_type', 'N/A')}")
+                    print(f"   Analysis Method: {context.get('analysis_method', 'N/A')}")
+                    if 'confidence_score' in context:
+                        print(f"   Confidence Score: {context['confidence_score']:.1%}")
+                    if 'pattern_indicators' in context:
+                        indicators = context['pattern_indicators']
+                        print(f"   Total Transactions: {indicators.get('total_transactions', 'N/A')}")
+                        print(f"   Total Value: ${indicators.get('total_value', 0):,.2f}")
+                        print(f"   Time Span: {indicators.get('time_span_minutes', 'N/A')} min")
             
             # Exibir alertas se existirem
             if analysis['alerts']:
@@ -476,6 +493,58 @@ class RuleTestFramework:
             execution_time=execution_time
         )
     
+    def test_multiple_small_transfers(self) -> TestResult:
+        """
+        Teste 6: Multiple Small Transfers (MEDIUM)
+        Testa detecção de padrão de estruturação/smurfing
+        com múltiplas transferências pequenas
+        """
+        print(f"\n🧪 TESTE 6: MULTIPLE SMALL TRANSFERS")
+        print(f"{'='*60}")
+        print("🎯 Objetivo: Verificar detecção de padrão de estruturação")
+        print("💰 Valor de teste: $8,500.00 (abaixo do threshold de $9,999)")
+        print("🔍 Endereço especial que simula padrão de estruturação")
+        print("📋 Threshold: Transações < $9,999 são suspeitas se em padrão")
+        
+        start_time = time.time()
+        
+        # Dados de teste para ativar a regra de estruturação
+        transaction_data = {
+            "hash": "0xtest006structuring006test006structuring006test006struct",
+            "from_address": "0xstructuring1234567890abcdef1234567890abcdef",  # Endereço que simula estruturação
+            "to_address": "0x9999999999999999999999999999999999999999",
+            "value": 8500.0,  # Valor abaixo do threshold ($9,999) - suspeito
+            "gas_price": 25.0,  # Gas price normal
+            "timestamp": datetime.now(timezone.utc).replace(hour=14).isoformat(),  # Horário normal
+            "block_number": 18500005,
+            "transaction_type": "TRANSFER"
+        }
+        
+        print("📤 Enviando transação com padrão de estruturação...")
+        response = self.call_api(transaction_data)
+        execution_time = time.time() - start_time
+        
+        if not response:
+            return TestResult(
+                rule_name="multiple_small_transfers",
+                success=False,
+                triggered=False,
+                error_message="Falha na chamada da API",
+                execution_time=execution_time
+            )
+        
+        analysis = self.analyze_response(response, "multiple_small_transfers")
+        
+        return TestResult(
+            rule_name="multiple_small_transfers",
+            success=True,
+            triggered=analysis["expected_rule_found"],
+            api_response=response,
+            risk_score=analysis["risk_score"],
+            alert_count=analysis["alert_count"],
+            execution_time=execution_time
+        )
+    
     def run_all_tests(self):
         """Executa todos os testes de regras"""
         print("🚀 INICIANDO TESTES AUTOMATIZADOS DE REGRAS")
@@ -492,7 +561,8 @@ class RuleTestFramework:
             ("2. High Value Transfer", self.test_high_value_transfer),
             ("3. New Wallet Interaction", self.test_new_wallet_interaction),
             ("4. Suspicious Gas Price", self.test_suspicious_gas_price),
-            ("5. Unusual Time Pattern", self.test_unusual_time_pattern)
+            ("5. Unusual Time Pattern", self.test_unusual_time_pattern),
+            ("6. Multiple Small Transfers", self.test_multiple_small_transfers)
         ]
         
         print(f"\n📋 EXECUTANDO {len(tests)} TESTES...")

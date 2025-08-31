@@ -9,6 +9,8 @@ import time
 import logging
 import random
 import os
+import hashlib
+import argparse
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 import requests
@@ -339,7 +341,6 @@ class BlockchainProvider:
                     logger.debug(f"✅ REAL MODE: Found funding date for {address}: {funded_date}")
             else:
                 # Modo simulação - gerar baseado no hash para consistência
-                import hashlib
                 address_hash = int(hashlib.md5(address.lower().encode()).hexdigest()[:8], 16)
                 days_ago = (address_hash % 180) + 1  # 1-180 dias
                 funded_date = current_time - timedelta(days=days_ago)
@@ -354,8 +355,6 @@ class BlockchainProvider:
         except Exception as e:
             logger.warning(f"Error getting funded date for {address}: {e}")
             # Fallback para modo simulação
-            import hashlib
-            import random
             if self.mode == "real":
                 days_ago = random.randint(30, 365)  # Fallback conservador
             else:
@@ -369,7 +368,6 @@ class BlockchainProvider:
         """
         try:
             # Rate limiting - aguardar um pouco entre chamadas
-            import asyncio
             await asyncio.sleep(0.2)  # 200ms entre chamadas
             
             # Primeiro, tentar buscar transações normais (incoming/outgoing)
@@ -476,7 +474,6 @@ class ContinuousMonitor:
     
     async def get_eth_price_usd(self) -> float:
         """Obtém preço atual do ETH em USD com cache"""
-        from datetime import datetime, timedelta
         
         # Verificar se temos cache válido
         if (self.eth_price_usd is not None and 
@@ -718,7 +715,6 @@ class ContinuousMonitor:
                                     funded_date_str = transaction.get('fundeddate_from')
                                     if funded_date_str:
                                         try:
-                                            from datetime import datetime
                                             funded_date = datetime.fromisoformat(funded_date_str.replace('Z', '+00:00'))
                                             tx_date = datetime.fromisoformat(transaction['timestamp'].replace('Z', '+00:00'))
                                             age_hours = (tx_date - funded_date).total_seconds() / 3600
@@ -766,7 +762,6 @@ class ContinuousMonitor:
 
 def main():
     """Função principal"""
-    import argparse
     
     parser = argparse.ArgumentParser(description="TecBan Continuous Monitor")
     parser.add_argument(

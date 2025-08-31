@@ -13,8 +13,11 @@ import sys
 # Adicionar path do projeto ao PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Core imports
 from di.container import container
-from interfaces.fraud_detection import IFraudDetector, IAlertManager, IBlockchainMonitor
+from interfaces.fraud_detection import (
+    IFraudDetector, IAlertManager, IBlockchainMonitor
+)
 from data.models import TransactionData, TransactionType, AlertData
 from config.settings import settings
 
@@ -78,18 +81,22 @@ def initialize_components():
     try:
         logger.info("Initializing ChimeraScan System...")
         
-        # Create instances directly for now (simplified DI)
-        from core.fraud_detector import FraudDetector
-        from alerts.alert_manager import AlertManager
-        from blockchain.ethereum_monitor import EthereumMonitor
+        # Initialize DI container with default implementations
+        container.initialize_defaults()
         
-        fraud_detector = FraudDetector()
-        alert_manager = AlertManager()
-        blockchain_monitor = EthereumMonitor(callback_handler=process_blockchain_transaction)
+        # Get instances from DI container
+        fraud_detector = container.get(IFraudDetector)
+        alert_manager = container.get(IAlertManager)
+        blockchain_monitor = container.get(IBlockchainMonitor)
+        
+        # Set callback for blockchain monitor after instantiation
+        if hasattr(blockchain_monitor, 'callback_handler'):
+            blockchain_monitor.callback_handler = process_blockchain_transaction
         
         app_state["initialized"] = True
         app_state["start_time"] = datetime.utcnow()
-        logger.info("All components initialized successfully")
+        logger.info("All components initialized successfully via DI Container")
+        
         # Iniciar processamento de alertas em thread separada
         threading.Thread(target=start_alert_processing, daemon=True).start()
     except Exception as e:
@@ -97,24 +104,6 @@ def initialize_components():
         app_state["errors"].append(str(e))
 
 initialize_components()
-
-
-async def process_blockchain_transaction(transaction: TransactionData):
-    """
-    Callback para processar transações da blockchain
-    """
-    try:
-        # Analisar transação com detector de fraudes
-        result = await fraud_detector.analyze_transaction(transaction)
-        
-        # Processar alertas se necessário
-        for alert in result.alerts:
-            await alert_manager.process_alert(alert)
-        
-        logger.debug(f"Processed blockchain transaction: {transaction.hash[:10]}...")
-        
-    except Exception as e:
-        logger.error(f"Error processing blockchain transaction: {e}")
 
 # ========================================
 # ROTAS DO DASHBOARD WEB

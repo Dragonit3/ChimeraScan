@@ -9,6 +9,9 @@ from interfaces.fraud_detection import (
     IRuleEngine, IRiskScorer, IAlertManager, IFraudDetector,
     IBlockchainMonitor, ITransactionRepository, IAlertRepository
 )
+from interfaces.data_providers import (
+    ITransactionHistoryProvider, IMarketDataProvider
+)
 
 T = TypeVar('T')
 
@@ -58,7 +61,36 @@ class DIContainer:
     def _create_instance(self, factory: Type[T]) -> T:
         """Create instance using constructor injection where possible"""
         try:
-            # For now, just create instances without injection to avoid issues
+            # Special handling for services that need dependency injection
+            if hasattr(factory, '__init__'):
+                import inspect
+                sig = inspect.signature(factory.__init__)
+                params = list(sig.parameters.keys())[1:]  # Skip 'self'
+                
+                # If constructor has parameters, try to inject dependencies
+                if params:
+                    args = []
+                    for param_name in params:
+                        # Look for matching registered interfaces
+                        param_annotation = sig.parameters[param_name].annotation
+                        if param_annotation in self._factories or param_annotation in self._instances:
+                            args.append(self.get(param_annotation))
+                        else:
+                            # Try to find by name convention
+                            if param_name == 'transaction_provider':
+                                from interfaces.data_providers import ITransactionHistoryProvider
+                                args.append(self.get(ITransactionHistoryProvider))
+                            elif param_name == 'market_provider':
+                                from interfaces.data_providers import IMarketDataProvider
+                                args.append(self.get(IMarketDataProvider))
+                            else:
+                                logger.warning(f"Could not inject dependency for parameter: {param_name}")
+                                break
+                    
+                    if len(args) == len(params):
+                        return factory(*args)
+            
+            # Default: create instance without injection
             return factory()
             
         except Exception as e:
@@ -77,6 +109,9 @@ class DIContainer:
             from alerts.alert_manager import AlertManager
             from core.fraud_detector import FraudDetector
             from blockchain.ethereum_monitor import EthereumMonitor
+            from infrastructure.data_providers.transaction_history_provider import SimpleTransactionHistoryProvider
+            from infrastructure.data_providers.market_data_provider import SimpleMarketDataProvider
+            from core.domain_services.pattern_analysis import StructuringDetectionService
             
             # Register default implementations
             self.register_singleton(IRuleEngine, RuleEngine)
@@ -85,8 +120,15 @@ class DIContainer:
             self.register_singleton(IFraudDetector, FraudDetector)
             self.register_singleton(IBlockchainMonitor, EthereumMonitor)
             
+            # Register new data providers
+            self.register_singleton(ITransactionHistoryProvider, SimpleTransactionHistoryProvider)
+            self.register_singleton(IMarketDataProvider, SimpleMarketDataProvider)
+            
+            # Register domain services (using concrete class as key for now)
+            self.register_singleton(StructuringDetectionService, StructuringDetectionService)
+            
             self._initialized = True
-            logger.info("DI Container initialized with default implementations")
+            logger.info("DI Container initialized with default implementations and new services")
             
         except Exception as e:
             logger.error(f"Failed to initialize DI container: {e}")

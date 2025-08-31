@@ -58,9 +58,9 @@
       "action": "immediate_alert"
     },
     "multiple_small_transfers": {
-      "enabled": false,
+      "enabled": true,
       "time_window_minutes": 10,
-      "min_count": 10,
+      "min_count": 8,
       "max_individual_value_usd": 9999,
       "total_threshold_usd": 50000,
       "severity": "MEDIUM",

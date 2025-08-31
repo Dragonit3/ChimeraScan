@@ -35,9 +35,20 @@ class RuleEngine(IRuleEngine):
     Implementa padrões de fraude conhecidos e customizáveis
     """
     
-    def __init__(self):
+    def __init__(self, structuring_service=None):
         self.rules_config = self._load_rules_config()
         self.active_rules = self._initialize_rules()
+        self.structuring_service = structuring_service
+        
+        # Se não foi injetado, inicializar pelo DI Container
+        if self.structuring_service is None:
+            try:
+                from di.container import container
+                from core.domain_services.pattern_analysis import StructuringDetectionService
+                self.structuring_service = container.get(StructuringDetectionService)
+            except Exception as e:
+                logger.warning(f"Could not inject StructuringDetectionService: {e}")
+                self.structuring_service = None
         logger.info(f"RuleEngine initialized with {len(self.active_rules)} active rules")
     
     def _load_rules_config(self) -> Dict[str, Any]:
@@ -311,7 +322,38 @@ class RuleEngine(IRuleEngine):
         """Regra: Múltiplas transferências pequenas (possível evasão)"""
         rule_config = self.rules_config["institutional_rules"]["multiple_small_transfers"]
         
-        # Verificar padrão de múltiplas transferências pequenas
+        # Usar o domain service para análise avançada de estruturação
+        if self.structuring_service:
+            try:
+                analysis_result = await self.structuring_service.analyze_structuring_pattern(
+                    transaction,
+                    rule_config
+                )
+                
+                if analysis_result.is_structuring:
+                    return RuleResult(
+                        rule_name="multiple_small_transfers",
+                        triggered=True,
+                        severity=RiskLevel(rule_config["severity"]),
+                        confidence=analysis_result.confidence_score,
+                        alert_title=f"Structuring Pattern Detected (Confidence: {analysis_result.confidence_score:.1%})",
+                        alert_description=f"Analysis found {analysis_result.pattern_indicators['total_transactions']} transactions totaling ${analysis_result.pattern_indicators['total_value']:,.2f} that suggest structuring behavior",
+                        context={
+                            "pattern_type": "advanced_structuring",
+                            "current_transaction_value": transaction.value,
+                            "threshold": rule_config["max_individual_value_usd"],
+                            "confidence_score": analysis_result.confidence_score,
+                            "pattern_indicators": analysis_result.pattern_indicators,
+                            "time_window_minutes": rule_config.get("time_window_minutes", 60),
+                            "analysis_method": "domain_service"
+                        },
+                        generate_alert=True
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"Error using StructuringDetectionService: {e}, falling back to simple detection")
+        
+        # Fallback: Verificar padrão simples
         pattern_detected = await self._detect_structuring_pattern(transaction, rule_config)
         
         if pattern_detected:
@@ -319,16 +361,17 @@ class RuleEngine(IRuleEngine):
                 rule_name="multiple_small_transfers",
                 triggered=True,
                 severity=RiskLevel(rule_config["severity"]),
-                confidence=0.75,
-                alert_title="Potential Structuring Detected",
+                confidence=0.60,  # Lower confidence for simple method
+                alert_title="Multiple Small Transfers",
                 alert_description="Multiple small transfers may indicate structuring/smurfing",
                 context={
-                    "pattern_type": "structuring",
+                    "pattern_type": "simple_structuring",
                     "individual_value": transaction.value,
                     "threshold": rule_config["max_individual_value_usd"],
+                    "analysis_method": "fallback",
                     "action": rule_config["action"]
                 },
-                generate_alert=True  # Sempre gerar alerta no dashboard
+                generate_alert=True
             )
         
         return None
