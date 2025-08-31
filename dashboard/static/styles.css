@@ -197,7 +197,7 @@ body {
 
 /* Container dos alertas recentes com scroll */
 #recent-alerts {
-    max-height: 400px; /* Altura máxima para mostrar ~3 alertas */
+    max-height: 600px; /* Altura maior para mostrar mais alertas */
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 8px;

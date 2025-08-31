@@ -499,7 +499,7 @@ def main():
             # Criar novo banco
             print("\n📁 CRIAR NOVO BANCO DE BLACKLIST")
             print("-" * 40)
-            db_name = get_user_input("Nome do arquivo do banco (ex: blocklist.db): ")
+            db_name = get_user_input("Nome do arquivo do banco (ex: blacklist.db): ")
             if not db_name.endswith('.db'):
                 db_name += '.db'
             

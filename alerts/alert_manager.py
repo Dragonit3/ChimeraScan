@@ -412,7 +412,7 @@ _{alert.description}_
                 logger.error(f"Error in alert processing loop: {e}")
                 await asyncio.sleep(1)
     
-    def get_active_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_active_alerts(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """Retorna alertas ativos (agora suportando múltiplos alertas por transação)"""
         active_list = []
         

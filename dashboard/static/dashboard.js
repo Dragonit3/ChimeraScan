@@ -5,6 +5,7 @@ class FraudDashboard {
         this.isConnected = false;
         this.updateInterval = 5000; // 5 segundos
         this.charts = {};
+        this.utcOffset = -3; // Default UTC-3 para Brasil
         this.init();
     }
 
@@ -13,6 +14,9 @@ class FraudDashboard {
         
         // Verificar conexão com API
         await this.checkConnection();
+        
+        // Carregar configurações de timezone
+        await this.loadTimezoneConfig();
         
         // Inicializar componentes
         this.initializeCharts();
@@ -26,6 +30,21 @@ class FraudDashboard {
         setInterval(() => this.loadDashboardData(), 3000);
         
         console.log('Dashboard initialized successfully');
+    }
+
+    async loadTimezoneConfig() {
+        try {
+            // Tentar obter configuração do backend
+            const response = await fetch('/api/v1/config/timezone');
+            if (response.ok) {
+                const data = await response.json();
+                this.utcOffset = data.utc_offset || -3;
+                console.log('Timezone config loaded:', data, 'UTC Offset:', this.utcOffset);
+            }
+        } catch (error) {
+            // Manter padrão UTC-3 se não conseguir obter configuração
+            console.log('Using default UTC-3 timezone, error:', error);
+        }
     }
 
     async checkConnection() {
@@ -163,8 +182,8 @@ class FraudDashboard {
             return;
         }
 
-        // Pegar apenas os 5 alertas mais recentes para exibição
-        const recentAlerts = alerts.slice(0, 5);
+        // Mostrar TODOS os alertas sem limitação
+        const recentAlerts = alerts;
 
         const alertsHtml = recentAlerts.map(alert => `
             <div class="alert-card card ${alert.severity.toLowerCase()}" 
@@ -501,10 +520,6 @@ class FraudDashboard {
         });
     }
 
-    showAlertDetails(alertId) {
-        // Implementar modal ou painel de detalhes
-    }
-
     showError(message) {
         // Mostrar mensagem de erro
         console.error(message);
@@ -522,9 +537,10 @@ class FraudDashboard {
         if (diffMins < 60) return `${diffMins}min atrás`;
         if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h atrás`;
         
-        // Para datas mais antigas, usar timezone brasileiro
-        return date.toLocaleDateString('pt-BR', {
-            timeZone: 'America/Sao_Paulo'
+        // Para datas mais antigas, usar offset UTC configurado
+        const offsetDate = new Date(date.getTime() + (this.utcOffset * 60 * 60 * 1000));
+        return offsetDate.toLocaleDateString('pt-BR', {
+            timeZone: 'UTC'
         });
     }
 
@@ -532,15 +548,18 @@ class FraudDashboard {
         if (!isoString) return 'N/A';
         const date = new Date(isoString);
         
-        // Converter para UTC-3 (horário de Brasília/São Paulo)
-        const time = date.toLocaleTimeString('pt-BR', { 
+        // Aplicar offset UTC configurado
+        const offsetDate = new Date(date.getTime() + (this.utcOffset * 60 * 60 * 1000));
+        
+        const time = offsetDate.toLocaleTimeString('pt-BR', { 
             hour: '2-digit', 
             minute: '2-digit',
-            timeZone: 'America/Sao_Paulo'
+            timeZone: 'UTC'
         });
-        const dateStr = date.toLocaleDateString('pt-BR', {
-            timeZone: 'America/Sao_Paulo'
+        const dateStr = offsetDate.toLocaleDateString('pt-BR', {
+            timeZone: 'UTC'
         });
+        
         return `${time} ${dateStr}`;
     }
 
@@ -572,146 +591,180 @@ class FraudDashboard {
     }
 
     showAlertDetails(alertId) {
-        const alert = this.alertsData.find(a => a.id === alertId);
-        if (!alert) {
-            return;
-        }
-
-        // Preencher o modal com os dados do alerta
-        document.getElementById('modal-title').textContent = `Alerta: ${alert.title}`;
-        document.getElementById('modal-rule-name').textContent = alert.rule_name;
-        document.getElementById('modal-severity').textContent = alert.severity;
-        document.getElementById('modal-severity').className = `badge badge-${alert.severity.toLowerCase()}`;
-        document.getElementById('modal-risk-score').textContent = alert.risk_score ? alert.risk_score.toFixed(4) : 'N/A';
-        
-        // Usar detected_at com formatação completa de data e hora
-        document.getElementById('modal-detected-at').textContent = this.formatFullDateTime(alert.detected_at || alert.created_at);
-        document.getElementById('modal-description').textContent = alert.description || 'Sem descrição';
-
-        // Informações da transação
-        document.getElementById('modal-tx-hash').textContent = alert.transaction_hash || 'N/A';
-        document.getElementById('modal-tx-value').textContent = alert.transaction_value ? 
-            `$${Number(alert.transaction_value).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'N/A';
-        document.getElementById('modal-gas-price').textContent = alert.gas_price ? 
-            `${alert.gas_price} Gwei` : 'N/A';
-        document.getElementById('modal-block-number').textContent = alert.block_number || 'N/A';
-
-        // Informações das carteiras
-        document.getElementById('modal-from-address').textContent = alert.from_address || 'N/A';
-        document.getElementById('modal-to-address').textContent = alert.to_address || 'N/A';
-        
-        // Datas de funding
-        document.getElementById('modal-fundeddate-from').textContent = alert.fundeddate_from ? 
-            this.formatTime(alert.fundeddate_from) : 'N/A';
-        document.getElementById('modal-fundeddate-to').textContent = alert.fundeddate_to ? 
-            this.formatTime(alert.fundeddate_to) : 'N/A';
-        
-        // Idade da carteira
-        document.getElementById('modal-wallet-age').textContent = alert.wallet_age_hours ? 
-            `${alert.wallet_age_hours.toFixed(1)} horas` : 'N/A';
-
-        // Seção de informações da blacklist (se disponível)
-        const blacklistSection = document.getElementById('modal-blacklist-section');
-        if ((alert.blacklist_info || alert.blacklist_infos) && alert.rule_name === 'blacklist_interaction') {
-            // Remover seção existente se houver
-            if (blacklistSection) {
-                blacklistSection.remove();
+        try {
+            const alert = this.alertsData.find(a => a.id === alertId);
+            if (!alert) {
+                console.warn('Alert not found:', alertId);
+                return;
             }
 
-            // Criar nova seção
-            const blacklistDiv = document.createElement('div');
-            blacklistDiv.id = 'modal-blacklist-section';
-            blacklistDiv.className = 'alert-detail-section';
+            // Preencher o modal com os dados do alerta
+            this.safeSetTextContent('modal-title', `Alerta: ${alert.title}`);
+            this.safeSetTextContent('modal-rule-name', alert.rule_name);
+            this.safeSetTextContent('modal-severity', alert.severity);
+            
+            const severityElement = document.getElementById('modal-severity');
+            if (severityElement) {
+                severityElement.className = `badge badge-${alert.severity.toLowerCase()}`;
+            }
+            
+            this.safeSetTextContent('modal-risk-score', alert.risk_score ? alert.risk_score.toFixed(4) : 'N/A');
+            
+            // Usar detected_at com formatação completa de data e hora
+            this.safeSetTextContent('modal-detected-at', this.formatFullDateTime(alert.detected_at || alert.created_at));
+            this.safeSetTextContent('modal-description', alert.description || 'Sem descrição');
 
-            if (alert.multiple_blacklists && alert.blacklist_infos) {
-                // Caso de múltiplos endereços blacklistados
-                let blacklistHTML = '<h3>Informações da Blacklist (Múltiplos Endereços)</h3>';
-                
-                alert.blacklist_infos.forEach((info, index) => {
-                    blacklistHTML += `
-                        <div class="blacklist-entry" style="margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                            <h4>Endereço ${index + 1} (${info.interaction_type})</h4>
-                            <div class="detail-grid">
-                                <div class="detail-item full-width">
-                                    <label>Address Hash:</label>
-                                    <span class="monospace">${info.address}</span>
+            // Informações da transação
+            this.safeSetTextContent('modal-tx-hash', alert.transaction_hash || 'N/A');
+            this.safeSetTextContent('modal-tx-value', alert.transaction_value ? 
+                `$${Number(alert.transaction_value).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'N/A');
+            this.safeSetTextContent('modal-gas-price', alert.gas_price ? 
+                `${alert.gas_price} Gwei` : 'N/A');
+            this.safeSetTextContent('modal-block-number', alert.block_number || 'N/A');
+
+            // Informações das carteiras
+            this.safeSetTextContent('modal-from-address', alert.from_address || 'N/A');
+            this.safeSetTextContent('modal-to-address', alert.to_address || 'N/A');
+            
+            // Datas de funding com formatação completa
+            this.safeSetTextContent('modal-fundeddate-from', alert.fundeddate_from ? 
+                this.formatFullDateTime(alert.fundeddate_from) : 'N/A');
+            this.safeSetTextContent('modal-fundeddate-to', alert.fundeddate_to ? 
+                this.formatFullDateTime(alert.fundeddate_to) : 'N/A');
+
+            // Tratar seção de blacklist de forma segura
+            this.handleBlacklistSection(alert);
+
+            // Mostrar o modal
+            const modal = document.getElementById('alert-modal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error showing alert details:', error);
+            // Mesmo com erro, tentar mostrar o modal básico
+            const modal = document.getElementById('alert-modal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+        }
+    }
+
+    safeSetTextContent(elementId, content) {
+        try {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = content || 'N/A';
+            }
+        } catch (error) {
+            console.warn(`Failed to set content for ${elementId}:`, error);
+        }
+    }
+
+    handleBlacklistSection(alert) {
+        try {
+            // Seção de informações da blacklist (se disponível)
+            const blacklistSection = document.getElementById('modal-blacklist-section');
+            if ((alert.blacklist_info || alert.blacklist_infos) && alert.rule_name === 'blacklist_interaction') {
+                // Remover seção existente se houver
+                if (blacklistSection) {
+                    blacklistSection.remove();
+                }
+
+                // Criar nova seção
+                const blacklistDiv = document.createElement('div');
+                blacklistDiv.id = 'modal-blacklist-section';
+                blacklistDiv.className = 'alert-detail-section';
+
+                if (alert.multiple_blacklists && alert.blacklist_infos) {
+                    // Caso de múltiplos endereços blacklistados
+                    let blacklistHTML = '<h3>Informações da Blacklist (Múltiplos Endereços)</h3>';
+                    
+                    alert.blacklist_infos.forEach((info, index) => {
+                        blacklistHTML += `
+                            <div class="blacklist-entry" style="margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                                <h4>Endereço ${index + 1} (${info.interaction_type})</h4>
+                                <div class="detail-grid">
+                                    <div class="detail-item full-width">
+                                        <label>Address Hash:</label>
+                                        <span class="monospace">${info.address}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Tipo:</label>
+                                        <span>${info.address_type || 'N/A'}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Severidade:</label>
+                                        <span>${info.severity_level || 'N/A'}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Motivo:</label>
+                                        <span>${info.reason || 'N/A'}</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <label>Fonte:</label>
+                                        <span>${info.source || 'N/A'}</span>
+                                    </div>
+                                    <div class="detail-item full-width">
+                                        <label>Observações:</label>
+                                        <span>${info.notes || 'Nenhuma observação'}</span>
+                                    </div>
                                 </div>
-                                <div class="detail-item">
-                                    <label>Tipo:</label>
-                                    <span>${info.address_type || 'N/A'}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <label>Severidade:</label>
-                                    <span>${info.severity_level || 'N/A'}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <label>Motivo:</label>
-                                    <span>${info.reason || 'N/A'}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <label>Fonte:</label>
-                                    <span>${info.source || 'N/A'}</span>
-                                </div>
-                                <div class="detail-item full-width">
-                                    <label>Observações:</label>
-                                    <span>${info.notes || 'Nenhuma observação'}</span>
-                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    blacklistDiv.innerHTML = blacklistHTML;
+                } else if (alert.blacklist_info) {
+                    // Caso de um único endereço blacklistado
+                    blacklistDiv.innerHTML = `
+                        <h3>Informações da Blacklist</h3>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>Tipo:</label>
+                                <span>${alert.blacklist_info.address_type || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Severidade:</label>
+                                <span>${alert.blacklist_info.severity_level || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Motivo:</label>
+                                <span>${alert.blacklist_info.reason || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Fonte:</label>
+                                <span>${alert.blacklist_info.source || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Address Hash:</label>
+                                <span class="monospace">${alert.wallet_address || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item full-width">
+                                <label>Observações:</label>
+                                <span>${alert.blacklist_info.notes || 'Nenhuma observação'}</span>
                             </div>
                         </div>
                     `;
-                });
+                }
                 
-                blacklistDiv.innerHTML = blacklistHTML;
-            } else if (alert.blacklist_info) {
-                // Caso de um único endereço blacklistado
-                blacklistDiv.innerHTML = `
-                    <h3>Informações da Blacklist</h3>
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <label>Tipo:</label>
-                            <span id="modal-blacklist-type">${alert.blacklist_info.address_type || 'N/A'}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Severidade:</label>
-                            <span id="modal-blacklist-severity">${alert.blacklist_info.severity_level || 'N/A'}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Motivo:</label>
-                            <span id="modal-blacklist-reason">${alert.blacklist_info.reason || 'N/A'}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Fonte:</label>
-                            <span id="modal-blacklist-source">${alert.blacklist_info.source || 'N/A'}</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Address Hash:</label>
-                            <span id="modal-blacklist-address" class="monospace">${alert.wallet_address || 'N/A'}</span>
-                        </div>
-                        <div class="detail-item full-width">
-                            <label>Observações:</label>
-                            <span id="modal-blacklist-notes">${alert.blacklist_info.notes || 'Nenhuma observação'}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Inserir após a última seção
-            const modalBody = document.querySelector('#alert-modal .modal-body');
-            if (modalBody) {
-                modalBody.appendChild(blacklistDiv);
-            }
+                // Inserir após a última seção
+                const modalBody = document.querySelector('#alert-modal .modal-body');
+                if (modalBody) {
+                    modalBody.appendChild(blacklistDiv);
+                }
 
-            // Mostrar seção
-            blacklistDiv.style.display = 'block';
-        } else {
-            // Esconder seção de blacklist se não há informações
-            if (blacklistSection) {
-                blacklistSection.style.display = 'none';
+                // Mostrar seção
+                blacklistDiv.style.display = 'block';
+            } else {
+                // Esconder seção de blacklist se não há informações
+                if (blacklistSection) {
+                    blacklistSection.style.display = 'none';
+                }
             }
+        } catch (error) {
+            console.warn('Error handling blacklist section:', error);
         }
-
-        // Mostrar o modal
-        document.getElementById('alert-modal').style.display = 'block';
     }
 }
 

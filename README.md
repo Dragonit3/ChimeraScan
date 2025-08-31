@@ -99,7 +99,7 @@ INFURA_URL=https://mainnet.infura.io/v3/SEU_PROJECT_ID
 ETHERSCAN_API_KEY=SUA_API_KEY
 
 # Blacklist Database: https://etherscan.io/apis
-DATABASE_BLOCK_URL=sqlite:///blocklist.db
+DATABASE_BLACKLIST_URL=sqlite:///blacklist.db
 
 # 3. Executar com dados reais
 python continuous_monitor.py --mode real

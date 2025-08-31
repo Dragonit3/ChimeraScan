@@ -126,9 +126,10 @@ class RuleEngine(IRuleEngine):
                 context={
                     "transaction_value": transaction.value,
                     "threshold": threshold,
-                    "ratio": transaction.value / threshold
+                    "ratio": transaction.value / threshold,
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -175,9 +176,10 @@ class RuleEngine(IRuleEngine):
                     "to_age_hours": to_age_hours,
                     "threshold_hours": threshold_hours,
                     "transaction_value": transaction.value,
-                    "used_fundeddate": transaction.fundeddate_from is not None or transaction.fundeddate_to is not None
+                    "used_fundeddate": transaction.fundeddate_from is not None or transaction.fundeddate_to is not None,
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -199,9 +201,10 @@ class RuleEngine(IRuleEngine):
                 alert_description="Pattern consistent with wash trading behavior",
                 context={
                     "pattern_type": "wash_trading",
-                    "time_window": rule_config["time_window_minutes"]
+                    "time_window": rule_config["time_window_minutes"],
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -262,31 +265,44 @@ class RuleEngine(IRuleEngine):
         """Regra: Preço de gas suspeito"""
         rule_config = self.rules_config["institutional_rules"]["suspicious_gas_price"]
         
-        # Obter preço médio de gas
-        avg_gas_price = await self._get_average_gas_price()
-        multiplier = rule_config["multiplier"]
+        # Obter configurações da regra
+        base_gas_price = rule_config.get("base_gas_price", 25.0)
+        multiplier_high = rule_config.get("multiplier_high", 5.0)
+        multiplier_low = rule_config.get("multiplier_low", 0.2)
+        absolute_high_threshold = rule_config.get("absolute_high_threshold", 100.0)
         
-        # Verificar se gas price é muito alto ou muito baixo
-        is_suspicious = (
-            transaction.gas_price > avg_gas_price * multiplier or
-            transaction.gas_price < avg_gas_price / multiplier
-        )
+        # Calcular thresholds
+        high_threshold = max(base_gas_price * multiplier_high, absolute_high_threshold)
+        low_threshold = base_gas_price * multiplier_low
+        
+        # Verificar se gas price é suspeito
+        is_too_high = transaction.gas_price > high_threshold
+        is_too_low = transaction.gas_price < low_threshold
+        is_suspicious = is_too_high or is_too_low
         
         if is_suspicious:
-            ratio = transaction.gas_price / avg_gas_price
+            ratio = transaction.gas_price / base_gas_price
+            suspicion_type = "very high" if is_too_high else "very low"
+            
             return RuleResult(
                 rule_name="suspicious_gas_price",
                 triggered=True,
                 severity=RiskLevel(rule_config["severity"]),
                 confidence=0.6,
-                alert_title=f"Suspicious Gas Price: {ratio:.1f}x average",
-                alert_description=f"Gas price {ratio:.1f}x the current average",
+                alert_title=f"Suspicious Gas Price: {ratio:.1f}x normal ({suspicion_type})",
+                alert_description=f"Gas price {ratio:.1f}x the normal rate ({transaction.gas_price:.1f} Gwei vs {base_gas_price:.1f} Gwei normal)",
                 context={
                     "transaction_gas_price": transaction.gas_price,
-                    "average_gas_price": avg_gas_price,
-                    "ratio": ratio
+                    "base_gas_price": base_gas_price,
+                    "ratio": ratio,
+                    "high_threshold": high_threshold,
+                    "low_threshold": low_threshold,
+                    "suspicion_type": suspicion_type,
+                    "is_too_high": is_too_high,
+                    "is_too_low": is_too_low,
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -309,9 +325,10 @@ class RuleEngine(IRuleEngine):
                 context={
                     "pattern_type": "structuring",
                     "individual_value": transaction.value,
-                    "threshold": rule_config["max_individual_value_usd"]
+                    "threshold": rule_config["max_individual_value_usd"],
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -350,9 +367,10 @@ class RuleEngine(IRuleEngine):
                     "transaction_hour": hour,
                     "is_weekend": is_weekend,
                     "is_off_hours": is_off_hours,
-                    "transaction_value": transaction.value
+                    "transaction_value": transaction.value,
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -386,9 +404,10 @@ class RuleEngine(IRuleEngine):
                     "price_deviation": price_deviation,
                     "volume_spike": volume_spike,
                     "price_threshold": price_threshold,
-                    "volume_threshold": volume_threshold
+                    "volume_threshold": volume_threshold,
+                    "action": rule_config["action"]
                 },
-                generate_alert=rule_config["action"] == "immediate_alert"
+                generate_alert=True  # Sempre gerar alerta no dashboard
             )
         
         return None
@@ -449,9 +468,10 @@ class RuleEngine(IRuleEngine):
         return await self._get_wallet_age_for_address(address, transaction)
     
     async def _get_average_gas_price(self) -> float:
-        """Obtém preço médio atual de gas"""
-        # Implementação simulada - seria consulta real à rede
-        return 25.0  # 25 Gwei
+        """Obtém preço médio atual de gas da configuração"""
+        # Usar valor configurado na regra
+        rule_config = self.rules_config["institutional_rules"]["suspicious_gas_price"]
+        return rule_config.get("base_gas_price", 25.0)
     
     async def _is_blacklisted(self, address: str) -> bool:
         """

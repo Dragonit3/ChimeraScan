@@ -381,6 +381,27 @@ def get_rules():
         logger.error(f"Error getting rules: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/api/v1/config/timezone', methods=['GET'])
+def get_timezone_config():
+    """Retorna configuração de timezone"""
+    try:
+        # Obter UTC_OFFSET do ambiente ou usar padrão
+        utc_offset = int(os.getenv('UTC_OFFSET', -3))
+        
+        return jsonify({
+            "utc_offset": utc_offset,
+            "timezone_name": f"UTC{utc_offset:+d}",
+            "description": f"Timezone offset: {utc_offset} hours from UTC"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting timezone config: {e}")
+        return jsonify({
+            "utc_offset": -3,
+            "timezone_name": "UTC-3",
+            "description": "Default Brazil timezone (UTC-3)"
+        }), 200
+
 @app.route('/api/v1/alerts', methods=['GET'])
 def get_alerts():
     """Retorna alertas ativos"""
@@ -388,7 +409,8 @@ def get_alerts():
         if not alert_manager:
             return jsonify({"error": "System not initialized"}), 503
         
-        limit = request.args.get('limit', 50, type=int)
+        # Usar limite muito alto por padrão para mostrar todos os alertas
+        limit = request.args.get('limit', 1000, type=int)
         alerts = alert_manager.get_active_alerts(limit)
         
         return jsonify({

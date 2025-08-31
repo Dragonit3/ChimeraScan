@@ -293,9 +293,17 @@ class FraudDetector(IFraudDetector):
         return age_hours
     
     async def _get_average_gas_price(self) -> float:
-        """Obtém o preço médio de gas atual"""
-        # Placeholder - seria implementado com consulta real ao blockchain
-        return 20.0  # 20 Gwei como padrão
+        """Obtém o preço médio de gas atual da configuração"""
+        try:
+            # Carregar configuração das regras
+            import json
+            with open('config/rules.json', 'r') as f:
+                rules_config = json.load(f)
+            base_gas_price = rules_config["institutional_rules"]["suspicious_gas_price"].get("base_gas_price", 25.0)
+            return base_gas_price
+        except:
+            # Fallback se não conseguir carregar configuração
+            return 25.0
     
     def _update_stats(self, is_suspicious: bool, alert_count: int, risk_score: float):
         """Atualiza estatísticas de detecção"""

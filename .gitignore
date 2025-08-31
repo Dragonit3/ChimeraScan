@@ -8,4 +8,4 @@ fraud_detection.db
 fraud_detection.log
 
 # Banco de dados de blacklist
-blocklist.db
+blacklist.db

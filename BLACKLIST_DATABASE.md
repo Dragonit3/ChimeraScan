@@ -7,7 +7,7 @@ Sistema de blacklist baseado em SQLite para detecção de endereços suspeitos e
 ### 1. Variável de Ambiente
 Adicione no arquivo `.env`:
 ```bash
-DATABASE_BLOCK_URL=sqlite:///blocklist.db
+DATABASE_BLACKLIST_URL=sqlite:///blacklist.db
 ```
 
 ### 2. Estrutura do Banco de Dados
@@ -165,10 +165,10 @@ WHERE address = '0xabcdef1234567890abcdef1234567890abcdef12';
 
 ## 🔍 Script de Inicialização
 
-Crie um arquivo `init_blocklist.sql` com dados iniciais:
+Crie um arquivo `init_blacklist.sql` com dados iniciais:
 
 ```sql
--- ChimeraScan Blocklist Initialization Script
+-- ChimeraScan Blacklist Initialization Script
 -- Execute este script para configurar a blacklist inicial
 
 -- Criar tabela e índices
@@ -220,10 +220,10 @@ SELECT COUNT(*) as total_addresses FROM blacklisted_addresses WHERE is_active = 
 ### Usando sqlite3 CLI
 ```bash
 # Conectar ao banco
-sqlite3 blocklist.db
+sqlite3 blacklist.db
 
 # Executar script de inicialização
-.read init_blocklist.sql
+.read init_blacklist.sql
 
 # Verificar dados
 SELECT address, severity_level, reason FROM blacklisted_addresses LIMIT 5;
@@ -238,7 +238,7 @@ import sqlite3
 import os
 
 # Conectar usando a variável de ambiente
-db_url = os.getenv('DATABASE_BLOCK_URL', 'sqlite:///blocklist.db')
+db_url = os.getenv('DATABASE_BLACKLIST_URL', 'sqlite:///blacklist.db')
 db_path = db_url.replace('sqlite:///', '')
 
 conn = sqlite3.connect(db_path)
@@ -291,20 +291,20 @@ AND created_at < datetime('now', '-30 days');
 ### Backup do Banco
 ```bash
 # Backup completo
-sqlite3 blocklist.db ".backup backup_$(date +%Y%m%d).db"
+sqlite3 blacklist.db ".backup backup_$(date +%Y%m%d).db"
 
 # Export para SQL
-sqlite3 blocklist.db ".dump" > blocklist_backup.sql
+sqlite3 blacklist.db ".dump" > blacklist_backup.sql
 
 # Restore do backup
-sqlite3 new_blocklist.db ".restore backup_20250830.db"
+sqlite3 new_blacklist.db ".restore backup_20250830.db"
 ```
 
 ### Permissões Recomendadas
 ```bash
 # Definir permissões apropriadas (Linux/Mac)
-chmod 640 blocklist.db
-chown app:app blocklist.db
+chmod 640 blacklist.db
+chown app:app blacklist.db
 ```
 
 ---

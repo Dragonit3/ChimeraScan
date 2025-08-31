@@ -5,7 +5,7 @@
       "threshold_usd": 10000,
       "severity": "HIGH",
       "description": "Transferência de alto valor detectada",
-      "action": "immediate_alert"
+      "action": "review_required"
     },
     "new_wallet_interaction": {
       "enabled": true,
@@ -13,11 +13,14 @@
       "min_value_usd": 500,
       "severity": "MEDIUM",
       "description": "Interação com carteira muito nova",
-      "action": "immediate_alert"
+      "action": "log_for_analysis"
     },
     "suspicious_gas_price": {
       "enabled": true,
-      "multiplier": 3.0,
+      "base_gas_price": 25.0,
+      "multiplier_high": 5.0,
+      "multiplier_low": 0.2,
+      "absolute_high_threshold": 100.0,
       "severity": "LOW",
       "description": "Gas price suspeito (muito alto ou muito baixo)",
       "action": "log_for_analysis"

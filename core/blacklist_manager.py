@@ -51,9 +51,9 @@ class BlacklistDatabase:
         Inicializa conexão com banco de dados
         
         Args:
-            database_url: URL do banco (ex: sqlite:///blocklist.db)
+            database_url: URL do banco (ex: sqlite:///blacklist.db)
         """
-        self.database_url = database_url or os.getenv('DATABASE_BLOCK_URL', 'sqlite:///blocklist.db')
+        self.database_url = database_url or os.getenv('DATABASE_BLACKLIST_URL', 'sqlite:///blacklist.db')
         self.db_path = self._extract_db_path(self.database_url)
         self._ensure_database_exists()
         logger.info(f"BlacklistDatabase initialized with: {self.db_path}")
