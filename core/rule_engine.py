@@ -196,27 +196,92 @@ class RuleEngine(IRuleEngine):
         return None
     
     async def _rule_wash_trading_pattern(self, transaction: TransactionData) -> Optional[RuleResult]:
-        """Regra: Padrão de wash trading"""
+        """Regra: Padrão de wash trading - Implementação completa da Etapa 1"""
         rule_config = self.rules_config["institutional_rules"]["wash_trading_pattern"]
         
-        # Verificar padrões de wash trading
-        is_wash_trading = await self._detect_wash_trading(transaction, rule_config)
+        try:
+            # Inicializar serviço de detecção refatorado se não existir
+            if not hasattr(self, '_wash_trading_service'):
+                # Usar serviço refatorado com arquitetura SOLID
+                from di.container import container
+                from core.domain_services.refactored_wash_trading_service import RefactoredWashTradingDetectionService
+                
+                # Tentar usar DI container primeiro, senão criar instância
+                try:
+                    self._wash_trading_service = container.get(RefactoredWashTradingDetectionService)
+                    logger.info("RefactoredWashTradingDetectionService loaded via DI container")
+                except:
+                    # Fallback: criar instância diretamente
+                    from interfaces.data_sources import ITransactionDataSource
+                    data_source = container.get(ITransactionDataSource)
+                    self._wash_trading_service = RefactoredWashTradingDetectionService(data_source)
+                    logger.info("RefactoredWashTradingDetectionService initialized with direct instantiation")
+            
+            # Analisar transação usando o serviço refatorado SOLID
+            wash_result = await self._wash_trading_service.analyze_transaction(transaction, rule_config)
+            
+            if wash_result.is_detected:
+                # Compilar informações dos padrões detectados
+                patterns_summary = []
+                total_volume = 0.0
+                involved_addresses = set()
+                
+                for pattern in wash_result.patterns_found:
+                    patterns_summary.append({
+                        "type": pattern.pattern_type.value,
+                        "confidence": pattern.confidence_score,
+                        "transaction_count": pattern.transaction_count,
+                        "volume": pattern.total_volume,
+                        "time_span_minutes": pattern.time_span_minutes
+                    })
+                    total_volume += pattern.total_volume
+                    involved_addresses.update(pattern.involved_addresses)
+                
+                # Determinar título e descrição baseados nos padrões encontrados
+                pattern_types = [p.pattern_type.value for p in wash_result.patterns_found]
+                primary_pattern = pattern_types[0] if pattern_types else "UNKNOWN"
+                
+                if "SELF_TRADING" in pattern_types:
+                    alert_title = f"Self-Trading Pattern Detected (${total_volume:,.2f})"
+                    alert_description = f"Self-trading pattern detected with confidence {wash_result.confidence_score:.1%}"
+                elif "BACK_AND_FORTH" in pattern_types:
+                    alert_title = f"Back-and-Forth Wash Trading (${total_volume:,.2f})"  
+                    alert_description = f"Repetitive back-and-forth trading pattern between {len(involved_addresses)} addresses"
+                else:
+                    alert_title = f"Wash Trading Pattern ({primary_pattern})"
+                    alert_description = f"Suspicious wash trading pattern detected with {len(wash_result.patterns_found)} patterns"
+                
+                return RuleResult(
+                    rule_name="wash_trading_pattern",
+                    triggered=True,
+                    severity=RiskLevel(rule_config["severity"]),
+                    confidence=wash_result.confidence_score,
+                    alert_title=alert_title,
+                    alert_description=alert_description,
+                    context={
+                        "wash_trading_detected": True,
+                        "overall_confidence": wash_result.confidence_score,
+                        "patterns_count": len(wash_result.patterns_found),
+                        "patterns_summary": patterns_summary,
+                        "total_volume": total_volume,
+                        "involved_addresses": list(involved_addresses),
+                        "processing_time_ms": wash_result.processing_time_ms,
+                        "algorithm_used": wash_result.algorithm_used,
+                        "analysis_details": wash_result.analysis_details,
+                        "action": rule_config["action"]
+                    },
+                    generate_alert=True  # Sempre gerar alerta no dashboard
+                )
+            else:
+                # Log para debugging quando não detectado
+                logger.debug(
+                    f"No wash trading pattern detected for {transaction.hash[:10]}... "
+                    f"(confidence: {wash_result.confidence_score:.3f})"
+                )
         
-        if is_wash_trading:
-            return RuleResult(
-                rule_name="wash_trading_pattern",
-                triggered=True,
-                severity=RiskLevel(rule_config["severity"]),
-                confidence=0.85,
-                alert_title="Potential Wash Trading Detected",
-                alert_description="Pattern consistent with wash trading behavior",
-                context={
-                    "pattern_type": "wash_trading",
-                    "time_window": rule_config["time_window_minutes"],
-                    "action": rule_config["action"]
-                },
-                generate_alert=True  # Sempre gerar alerta no dashboard
-            )
+        except Exception as e:
+            logger.error(f"Error in wash trading detection for transaction {transaction.hash}: {e}")
+            # Não falhar a análise geral por erro em uma regra
         
         return None
     

@@ -16,6 +16,9 @@ Regras testadas:
 4. Suspicious Gas Price (LOW)
 5. Unusual Time Pattern (MEDIUM)
 6. Multiple Small Transfers (MEDIUM)
+7. Wash Trading Pattern - Self-Trading (HIGH)
+8. Wash Trading Pattern - Back-and-Forth (HIGH)
+9. Wash Trading Pattern - Circular (HIGH)
 
 Autor: ChimeraScan Team
 Data: 2025-08-30
@@ -405,7 +408,7 @@ class RuleTestFramework:
             "from_address": "0x5555555555555555555555555555555555555555",
             "to_address": "0x6666666666666666666666666666666666666666",
             "value": 500.0,  # Valor normal
-            "gas_price": 150.0,  # Gas price muito alto (6x o normal de 25 Gwei)
+            "gas_price": 200.0,  # Gas price muito alto (6x o normal de 25 Gwei)
             "timestamp": datetime.now(timezone.utc).replace(hour=14).isoformat(),  # Horário normal
             "block_number": 18500003,
             "transaction_type": "TRANSFER"
@@ -545,6 +548,225 @@ class RuleTestFramework:
             execution_time=execution_time
         )
     
+    def test_wash_trading_pattern(self) -> TestResult:
+        """
+        Teste 7: Wash Trading Pattern (HIGH)
+        Testa detecção de padrões de wash trading suspeitos
+        """
+        print(f"\n🧪 TESTE 7: WASH TRADING PATTERN")
+        print(f"{'='*60}")
+        print("🎯 Objetivo: Verificar detecção de padrões de wash trading")
+        print("📋 Cenário: Self-trading (endereço enviando para si mesmo)")
+        
+        start_time = time.time()
+        
+        # Dados de teste para ativar wash trading (self-trading)
+        transaction_data = {
+            "hash": "0xwash001trading001test001pattern001detection001wash001trading",
+            "from_address": "0x1111222233334444555566667777888899990000",  # Mesmo endereço
+            "to_address": "0x1111222233334444555566667777888899990000",    # que destino (self-trading)
+            "value": 5000.0,  # Valor alto para chamar atenção
+            "gas_price": 45.0,  # Gas price normal
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "block_number": 18600000,
+            "transaction_type": "TRANSFER"
+        }
+        
+        print("📤 Enviando transação self-trading...")
+        print(f"📊 From: {transaction_data['from_address'][:10]}...")
+        print(f"📊 To:   {transaction_data['to_address'][:10]}... (MESMO ENDEREÇO)")
+        print(f"💰 Valor: ${transaction_data['value']:,.2f}")
+        
+        response = self.call_api(transaction_data)
+        execution_time = time.time() - start_time
+        
+        if not response:
+            return TestResult(
+                rule_name="wash_trading_pattern",
+                success=False,
+                triggered=False,
+                error_message="Falha na chamada da API",
+                execution_time=execution_time
+            )
+        
+        analysis = self.analyze_response(response, "wash_trading_pattern")
+        
+        # Informações adicionais para wash trading
+        print(f"🔍 Análise de resposta:")
+        if response.get('result', {}).get('patterns_found'):
+            patterns = response['result']['patterns_found']
+            print(f"   📊 Padrões detectados: {len(patterns)}")
+            for pattern in patterns[:3]:  # Mostrar até 3 padrões
+                pattern_type = pattern.get('pattern_type', 'N/A')
+                confidence = pattern.get('confidence_score', 0)
+                print(f"   🎯 Tipo: {pattern_type} | Confiança: {confidence:.2f}")
+        
+        if response.get('result', {}).get('analysis_details'):
+            details = response['result']['analysis_details']
+            if 'statistical_analysis' in details:
+                stat_info = details['statistical_analysis']
+                print(f"   🧠 Análise Estatística: {stat_info.get('analysis_type', 'N/A')}")
+                print(f"   📈 Score Estatístico: {stat_info.get('stat_score', 0):.2f}")
+        
+        return TestResult(
+            rule_name="wash_trading_pattern",
+            success=True,
+            triggered=analysis["expected_rule_found"],
+            api_response=response,
+            risk_score=analysis["risk_score"],
+            alert_count=analysis["alert_count"],
+            execution_time=execution_time
+        )
+    
+    def test_wash_trading_back_forth(self) -> TestResult:
+        """
+        Teste 8: Wash Trading Back-and-Forth Pattern (HIGH) - REFACTORED
+        Testa detecção usando arquitetura refatorada com dados realistas
+        """
+        print(f"\n🧪 TESTE 8: WASH TRADING BACK-AND-FORTH (REFACTORED)")
+        print(f"{'='*60}")
+        print("🎯 Objetivo: Verificar detecção com arquitetura SOLID")
+        print("📋 Cenário: Usar endereço que gerará padrão back-and-forth realista")
+        
+        start_time = time.time()
+        
+        # Usar endereço que o TestTransactionDataSource reconhece como back-and-forth
+        transaction_data = {
+            "hash": "0xrefactored001backforth001solid001architecture001test",
+            "from_address": "0xAAAABBBBCCCCDDDDEEEEFFFF0000111122223333",  # Endereço com padrão AAAABBBB
+            "to_address": "0xFFFFEEEEDDDDCCCCBBBBAAAA3333222211110000",    # Parceiro automático
+            "value": 7500.0,  # Valor que não conflita com outras regras
+            "gas_price": 35.0,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "block_number": 18700000,
+            "transaction_type": "TRANSFER"
+        }
+        
+        print("📤 Enviando transação para análise refatorada...")
+        print(f"📊 From: {transaction_data['from_address'][:16]}... (padrão AAAABBBB)")
+        print(f"📊 To:   {transaction_data['to_address'][:16]}... (padrão FFFFEEEE)")
+        print(f"💰 Valor: ${transaction_data['value']:,.2f}")
+        print("🏗️ Usando arquitetura SOLID refatorada...")
+        
+        response = self.call_api(transaction_data)
+        execution_time = time.time() - start_time
+        
+        if not response:
+            return TestResult(
+                rule_name="wash_trading_back_forth_refactored",
+                success=False,
+                triggered=False,
+                error_message="Falha na chamada da API",
+                execution_time=execution_time
+            )
+        
+        analysis = self.analyze_response(response, "wash_trading_pattern")
+        
+        # Informações específicas para back-and-forth refatorado
+        print(f"🔍 Análise arquitetura refatorada:")
+        if response.get('result', {}).get('patterns_found'):
+            patterns = response['result']['patterns_found']
+            print(f"   📊 Padrões detectados: {len(patterns)}")
+            for pattern in patterns[:3]:
+                pattern_type = pattern.get('pattern_type', 'N/A')
+                confidence = pattern.get('confidence_score', 0)
+                print(f"   🎯 Tipo: {pattern_type} | Confiança: {confidence:.3f}")
+                if pattern_type == 'BACK_AND_FORTH':
+                    print(f"   ✅ BACK_AND_FORTH detectado via SOLID!")
+        
+        if response.get('result', {}).get('analysis_details'):
+            details = response['result']['analysis_details']
+            print(f"   🏗️ Algorithm: {details.get('algorithm_used', 'N/A')}")
+            print(f"   📈 Patterns analyzed: {details.get('patterns_analyzed', 0)}")
+        
+        return TestResult(
+            rule_name="wash_trading_back_forth_refactored",
+            success=True,
+            triggered=analysis["expected_rule_found"],
+            api_response=response,
+            risk_score=analysis["risk_score"],
+            alert_count=analysis["alert_count"],
+            execution_time=execution_time
+        )
+    
+    def test_wash_trading_circular(self) -> TestResult:
+        """
+        Teste 9: Wash Trading Circular Pattern (HIGH) - REFACTORED
+        Testa detecção usando arquitetura refatorada com geração inteligente
+        """
+        print(f"\n🧪 TESTE 9: WASH TRADING CIRCULAR (REFACTORED)")
+        print(f"{'='*60}")
+        print("🎯 Objetivo: Verificar detecção circular com SOLID principles")
+        print("📋 Cenário: Usar endereço que ativará padrão circular complexo")
+        
+        start_time = time.time()
+        
+        # Usar endereço que o TestTransactionDataSource reconhece como circular
+        transaction_data = {
+            "hash": "0xrefactored001circular001chain001detection001solid001test",
+            "from_address": "0x1111222233334444555566667777888899990000",  # Padrão 1111 2222
+            "to_address": "0x0000999988887777666655554444333322221111",    # Padrão reverso circular
+            "value": 12500.0,  # Valor que permite análise circular
+            "gas_price": 42.0,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "block_number": 18800000,
+            "transaction_type": "TRANSFER"
+        }
+        
+        print("📤 Enviando transação para análise circular refatorada...")
+        print(f"📊 From: {transaction_data['from_address'][:16]}... (padrão 11112222)")
+        print(f"📊 To:   {transaction_data['to_address'][:16]}... (padrão 00009999)")
+        print(f"💰 Valor: ${transaction_data['value']:,.2f}")
+        print("� Sistema gerará cadeia circular inteligente...")
+        
+        response = self.call_api(transaction_data)
+        execution_time = time.time() - start_time
+        
+        if not response:
+            return TestResult(
+                rule_name="wash_trading_circular_refactored",
+                success=False,
+                triggered=False,
+                error_message="Falha na chamada da API",
+                execution_time=execution_time
+            )
+        
+        analysis = self.analyze_response(response, "wash_trading_pattern")
+        
+        # Informações específicas para circular refatorado
+        print(f"🔍 Análise arquitetura circular:")
+        if response.get('result', {}).get('patterns_found'):
+            patterns = response['result']['patterns_found']
+            print(f"   📊 Padrões detectados: {len(patterns)}")
+            for pattern in patterns[:3]:
+                pattern_type = pattern.get('pattern_type', 'N/A')
+                confidence = pattern.get('confidence_score', 0)
+                print(f"   🎯 Tipo: {pattern_type} | Confiança: {confidence:.3f}")
+                if pattern_type == 'CIRCULAR':
+                    print(f"   🔄 CIRCULAR detectado via Strategy Pattern!")
+                    # Informações adicionais sobre cadeia circular
+                    if 'circular_path' in pattern:
+                        path_info = pattern['circular_path']
+                        print(f"      🌐 Tamanho da cadeia: {len(path_info.get('addresses', []))}")
+                        print(f"      💰 Volume total: ${path_info.get('total_volume', 0):,.2f}")
+        
+        if response.get('result', {}).get('analysis_details'):
+            details = response['result']['analysis_details']
+            print(f"   🏗️ Algorithm: {details.get('algorithm_used', 'N/A')}")
+            print(f"   🔄 Circular paths found: {details.get('circular_paths_found', 0)}")
+            if details.get('factory_enhanced', False):
+                print(f"   ⚡ Enhanced factory patterns used!")
+        
+        return TestResult(
+            rule_name="wash_trading_circular_refactored",
+            success=True,
+            triggered=analysis["expected_rule_found"],
+            api_response=response,
+            risk_score=analysis["risk_score"],
+            alert_count=analysis["alert_count"],
+            execution_time=execution_time
+        )
+    
     def run_all_tests(self):
         """Executa todos os testes de regras"""
         print("🚀 INICIANDO TESTES AUTOMATIZADOS DE REGRAS")
@@ -562,7 +784,10 @@ class RuleTestFramework:
             ("3. New Wallet Interaction", self.test_new_wallet_interaction),
             ("4. Suspicious Gas Price", self.test_suspicious_gas_price),
             ("5. Unusual Time Pattern", self.test_unusual_time_pattern),
-            ("6. Multiple Small Transfers", self.test_multiple_small_transfers)
+            ("6. Multiple Small Transfers", self.test_multiple_small_transfers),
+            ("7. Wash Trading Pattern (Self)", self.test_wash_trading_pattern),
+            ("8. Wash Trading Back-and-Forth", self.test_wash_trading_back_forth),
+            ("9. Wash Trading Circular", self.test_wash_trading_circular)
         ]
         
         print(f"\n📋 EXECUTANDO {len(tests)} TESTES...")

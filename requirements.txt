@@ -7,6 +7,10 @@ python-dotenv==1.0.0
 # Database
 sqlalchemy==2.0.21
 
+# Statistical analysis (for advanced pattern detection)
+numpy==1.24.3
+scipy==1.11.1
+
 # Development tools
 black==23.7.0
 flake8==6.0.0
@@ -16,7 +20,6 @@ plotly==5.16.1
 
 # Future dependencies (commented out until implemented)
 # pandas==2.1.1
-# numpy
 # scikit-learn==1.3.0
 # psycopg2-binary
 # alembic==1.12.0

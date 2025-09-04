@@ -112,6 +112,22 @@ class DIContainer:
             from infrastructure.data_providers.transaction_history_provider import SimpleTransactionHistoryProvider
             from infrastructure.data_providers.market_data_provider import SimpleMarketDataProvider
             from core.domain_services.pattern_analysis import StructuringDetectionService
+            from core.domain_services.wash_trading_detection import AdvancedWashTradingDetectionService
+            
+            # Import advanced components (Etapa 2)
+            from infrastructure.graph.transaction_graph_provider import AdvancedTransactionGraphProvider
+            from infrastructure.analyzers.advanced_pattern_analyzers import (
+                AdvancedTemporalAnalyzer, AdvancedVolumeAnalyzer
+            )
+            from infrastructure.data_sources.test_transaction_data_source import TestTransactionDataSource
+            from core.domain_services.refactored_wash_trading_service import RefactoredWashTradingDetectionService
+            
+            # Import interfaces
+            from interfaces.wash_trading import (
+                IWashTradingDetector, ITransactionGraphProvider,
+                ITemporalPatternAnalyzer, IVolumeAnalyzer
+            )
+            from interfaces.data_sources import ITransactionDataSource
             
             # Register default implementations
             self.register_singleton(IRuleEngine, RuleEngine)
@@ -124,8 +140,17 @@ class DIContainer:
             self.register_singleton(ITransactionHistoryProvider, SimpleTransactionHistoryProvider)
             self.register_singleton(IMarketDataProvider, SimpleMarketDataProvider)
             
+            # Register advanced wash trading components (Etapa 2 - Refactored)
+            self.register_singleton(ITransactionDataSource, TestTransactionDataSource)
+            self.register_singleton(ITransactionGraphProvider, AdvancedTransactionGraphProvider)
+            self.register_singleton(ITemporalPatternAnalyzer, AdvancedTemporalAnalyzer)
+            self.register_singleton(IVolumeAnalyzer, AdvancedVolumeAnalyzer)
+            self.register_singleton(IWashTradingDetector, RefactoredWashTradingDetectionService)
+            
             # Register domain services (using concrete class as key for now)
             self.register_singleton(StructuringDetectionService, StructuringDetectionService)
+            self.register_singleton(AdvancedWashTradingDetectionService, AdvancedWashTradingDetectionService)
+            self.register_singleton(RefactoredWashTradingDetectionService, RefactoredWashTradingDetectionService)
             
             self._initialized = True
             logger.info("DI Container initialized with default implementations and new services")

@@ -26,10 +26,33 @@
       "action": "log_for_analysis"
     },
     "wash_trading_pattern": {
-      "enabled": false,
-      "time_window_minutes": 5,
-      "min_transactions": 3,
-      "value_similarity_threshold": 0.95,
+      "enabled": true,
+      "algorithms": {
+        "back_and_forth": {
+          "enabled": true,
+          "time_window_minutes": 30,
+          "min_alternations": 6,
+          "value_similarity_threshold": 0.95,
+          "frequency_threshold": 8
+        },
+        "self_trading": {
+          "enabled": true,
+          "detection_method": "direct_match"
+        },
+        "circular_detection": {
+          "enabled": true,
+          "max_hops": 5,
+          "time_window_minutes": 60,
+          "min_transactions_in_cycle": 3,
+          "value_preservation_threshold": 0.95
+        }
+      },
+      "confidence_weights": {
+        "temporal_pattern": 0.35,
+        "volume_similarity": 0.35,
+        "frequency_analysis": 0.30
+      },
+      "min_confidence": 0.80,
       "severity": "HIGH",
       "description": "Padrão de wash trading detectado",
       "action": "immediate_alert"

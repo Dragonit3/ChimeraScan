@@ -1,6 +1,6 @@
 """
 Sistema de Pontuação de Risco
-Implementa algoritmos de ML e análise de padrões para scoring de risco
+Implementa algoritmos estatísticos e análise de padrões para scoring de risco
 """
 import logging
 import math
