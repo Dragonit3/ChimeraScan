@@ -5,45 +5,67 @@ class FraudDashboard {
         this.isConnected = false;
         this.updateInterval = 5000; // 5 segundos
         this.charts = {};
-        this.utcOffset = -3; // Default UTC-3 para Brasil
+        this.utcOffset = null; // Will be loaded from backend
+        this.timezoneConfig = null; // Full timezone configuration
+        this.updateTimer = null; // Timer para atualizações em tempo real
         this.init();
     }
 
     async init() {
         console.log('Initializing ChimeraScan Dashboard...');
         
-        // Verificar conexão com API
+        // Step 1: Check API connectivity
         await this.checkConnection();
         
-        // Carregar configurações de timezone
+        // Step 2: Load timezone configuration FIRST (critical for all date/time display)
         await this.loadTimezoneConfig();
+        console.log(`Dashboard configured for timezone: ${this.timezoneConfig?.timezone_name || 'UTC'}`);
         
-        // Inicializar componentes
+        // Step 3: Initialize UI components (now with proper timezone config)
         this.initializeCharts();
-        this.startRealTimeUpdates();
         this.bindEventListeners();
         
-        // Carregar dados iniciais
+        // Step 4: Load initial data (will use proper timezone formatting)
         await this.loadDashboardData();
         
-        // Atualizar a cada 3 segundos
-        setInterval(() => this.loadDashboardData(), 3000);
-        
+        // Step 5: Start real-time updates ONLY ONCE
+        this.startRealTimeUpdates();
+
         console.log('Dashboard initialized successfully');
+    }
+
+    // Debug method to display current timezone configuration
+    getTimezoneDebugInfo() {
+        return {
+            utcOffset: this.utcOffset,
+            timezoneConfig: this.timezoneConfig,
+            currentTime: new Date().toISOString(),
+            formattedCurrentTime: this.formatFullDateTime(new Date().toISOString())
+        };
     }
 
     async loadTimezoneConfig() {
         try {
-            // Tentar obter configuração do backend
+            console.log('Loading timezone configuration from backend...');
             const response = await fetch('/api/v1/config/timezone');
             if (response.ok) {
-                const data = await response.json();
-                this.utcOffset = data.utc_offset || -3;
-                console.log('Timezone config loaded:', data, 'UTC Offset:', this.utcOffset);
+                this.timezoneConfig = await response.json();
+                this.utcOffset = this.timezoneConfig.utc_offset;
+                console.log('Timezone configuration loaded:', this.timezoneConfig);
+                console.log('UTC Offset set to:', this.utcOffset);
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            // Manter padrão UTC-3 se não conseguir obter configuração
-            console.log('Using default UTC-3 timezone, error:', error);
+            console.error('Failed to load timezone configuration:', error);
+            console.error('This indicates a configuration or network issue.');
+            // Emergency fallback to UTC - should not happen in production
+            this.utcOffset = 0;
+            this.timezoneConfig = {
+                utc_offset: 0,
+                timezone_name: "UTC",
+                description: "Emergency fallback to UTC due to configuration error"
+            };
         }
     }
 
@@ -498,14 +520,34 @@ class FraudDashboard {
     }
 
     startRealTimeUpdates() {
-        // Atualizar dados a cada intervalo
-        setInterval(async () => {
+        // Prevenir múltiplos timers
+        if (this.updateTimer) {
+            clearInterval(this.updateTimer);
+        }
+        
+        // Atualizar dados a cada intervalo configurado
+        this.updateTimer = setInterval(async () => {
             if (this.isConnected) {
                 await this.loadDashboardData();
             } else {
                 await this.checkConnection();
             }
         }, this.updateInterval);
+        
+        console.log(`Real-time updates started with interval: ${this.updateInterval}ms`);
+    }
+
+    stopRealTimeUpdates() {
+        if (this.updateTimer) {
+            clearInterval(this.updateTimer);
+            this.updateTimer = null;
+            console.log('Real-time updates stopped');
+        }
+    }
+
+    destroy() {
+        // Limpar recursos quando dashboard for destruído
+        this.stopRealTimeUpdates();
     }
 
     bindEventListeners() {
@@ -527,40 +569,77 @@ class FraudDashboard {
     }
 
     // Funções utilitárias
-    formatTime(isoString) {
-        const date = new Date(isoString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
+    normalizeIsoToUtc(isoString) {
+        // Garantir que a string ISO está em formato UTC correto
+        if (!isoString) return null;
         
-        if (diffMins < 1) return 'agora';
-        if (diffMins < 60) return `${diffMins}min atrás`;
-        if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h atrás`;
+        // Se não termina com 'Z', adicionar (assumir UTC)
+        if (!isoString.endsWith('Z') && !isoString.includes('+') && !isoString.includes('-', 10)) {
+            return isoString + 'Z';
+        }
         
-        // Para datas mais antigas, usar offset UTC configurado
-        const offsetDate = new Date(date.getTime() + (this.utcOffset * 60 * 60 * 1000));
-        return offsetDate.toLocaleDateString('pt-BR', {
-            timeZone: 'UTC'
+        return isoString;
+    }
+
+    formatWithTimeZone(dateUtc, options) {
+        // Aplicar offset de timezone configurado
+        if (this.utcOffset === null || this.utcOffset === undefined) {
+            // Fallback para UTC se timezone não carregado
+            return dateUtc.toLocaleString('pt-BR', {
+                ...options,
+                timeZone: 'UTC'
+            });
+        }
+        
+        // Aplicar offset: Para UTC-3, somar -3 horas (subtrai 3h)
+        const offsetDate = new Date(dateUtc.getTime() + (this.utcOffset * 60 * 60 * 1000));
+        
+        return offsetDate.toLocaleString('pt-BR', {
+            ...options,
+            timeZone: 'UTC' // Usar UTC pois já aplicamos o offset manualmente
         });
+    }
+
+    formatTime(isoString) {
+        if (!isoString) return 'N/A';
+
+        const norm = this.normalizeIsoToUtc(isoString);
+        const dateUtc = new Date(norm);
+        const nowUtc = new Date(); // epoch é sempre UTC
+
+        const diffMs = nowUtc - dateUtc;
+        const diffMins = Math.floor(diffMs / 60000);
+
+        // Recente (<1 min): mostra hora:min
+        if (diffMins >= 0 && diffMins < 1) {
+            return this.formatWithTimeZone(dateUtc, { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Futuro
+        if (diffMins < 0 && Math.abs(diffMins) < 60) {
+            return `em ${Math.abs(diffMins)}min`;
+        }
+
+        // Até 59 min
+        if (diffMins >= 0 && diffMins < 60) return `${diffMins}min atrás`;
+
+        // Até 23h
+        if (diffMins >= 60 && diffMins < 1440) return `${Math.floor(diffMins / 60)}h atrás`;
+
+        // Antigos: data (ou data + hora, se preferir)
+        return this.formatWithTimeZone(dateUtc, { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
     formatFullDateTime(isoString) {
         if (!isoString) return 'N/A';
-        const date = new Date(isoString);
-        
-        // Aplicar offset UTC configurado
-        const offsetDate = new Date(date.getTime() + (this.utcOffset * 60 * 60 * 1000));
-        
-        const time = offsetDate.toLocaleTimeString('pt-BR', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZone: 'UTC'
-        });
-        const dateStr = offsetDate.toLocaleDateString('pt-BR', {
-            timeZone: 'UTC'
-        });
-        
-        return `${time} ${dateStr}`;
+        const norm = this.normalizeIsoToUtc(isoString);
+        const dateUtc = new Date(norm);
+
+        const time = this.formatWithTimeZone(dateUtc, { hour: '2-digit', minute: '2-digit' });
+        const date = this.formatWithTimeZone(dateUtc, { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+        // Mantém o mesmo layout que você usa
+        return `${time} ${date}`;
     }
 
     generateTimeLabels(count) {

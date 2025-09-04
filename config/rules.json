@@ -18,8 +18,8 @@
     "suspicious_gas_price": {
       "enabled": true,
       "base_gas_price": 25.0,
-      "multiplier_high": 5.0,
-      "multiplier_low": 0.2,
+      "multiplier_high": 7.0,
+      "multiplier_low": 0.1,
       "absolute_high_threshold": 100.0,
       "severity": "LOW",
       "description": "Gas price suspeito (muito alto ou muito baixo)",

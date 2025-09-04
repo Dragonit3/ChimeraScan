@@ -374,21 +374,16 @@ def get_rules():
 def get_timezone_config():
     """Retorna configuração de timezone"""
     try:
-        # Obter UTC_OFFSET do ambiente ou usar padrão
-        utc_offset = int(os.getenv('UTC_OFFSET', -3))
-        
-        return jsonify({
-            "utc_offset": utc_offset,
-            "timezone_name": f"UTC{utc_offset:+d}",
-            "description": f"Timezone offset: {utc_offset} hours from UTC"
-        })
+        from config.config_manager import config
+        return jsonify(config.get_timezone_config())
         
     except Exception as e:
         logger.error(f"Error getting timezone config: {e}")
+        # Emergency fallback - should not happen with proper config
         return jsonify({
-            "utc_offset": -3,
-            "timezone_name": "UTC-3",
-            "description": "Default Brazil timezone (UTC-3)"
+            "utc_offset": 0,
+            "timezone_name": "UTC",
+            "description": "Fallback UTC timezone (configuration error)"
         }), 200
 
 @app.route('/api/v1/alerts', methods=['GET'])
