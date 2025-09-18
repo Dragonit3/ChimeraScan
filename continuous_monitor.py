@@ -36,7 +36,7 @@ class BlockchainProvider:
         self.wallet_funding_cache = {}  # {address: datetime}
         self.cache_expiry = 3600  # Cache por 1 hora
         
-        if mode == "real" and infura_url:
+        if mode in ["real", "real_fast"] and infura_url:
             try:
                 self.web3 = Web3(Web3.HTTPProvider(infura_url))
                 if self.web3.is_connected():
@@ -50,7 +50,7 @@ class BlockchainProvider:
     
     async def get_latest_block(self) -> Optional[int]:
         """Obtém o número do bloco mais recente"""
-        if self.mode == "real" and self.web3:
+        if self.mode in ["real", "real_fast"] and self.web3:
             try:
                 return self.web3.eth.block_number
             except Exception as e:
@@ -64,6 +64,8 @@ class BlockchainProvider:
         """Obtém transações de um bloco específico"""
         if self.mode == "real" and self.web3:
             return await self._get_real_block_transactions(block_number)
+        elif self.mode == "real_fast" and self.web3:
+            return await self._get_real_fast_block_transactions(block_number)
         else:
             return await self._get_simulated_transactions()
     
@@ -146,6 +148,80 @@ class BlockchainProvider:
             
         except Exception as e:
             logger.error(f"Erro ao obter transações reais: {e}")
+            return []
+    
+    async def _get_real_fast_block_transactions(self, block_number: int) -> List[Dict]:
+        """Obtém transações reais de um bloco SEM datas de funding (modo rápido)"""
+        try:
+            block = self.web3.eth.get_block(block_number, full_transactions=True)
+            transactions = []
+            
+            # Filtrar transações com valor > 0 para análise mais interessante
+            value_transactions = []
+            contract_transactions = []
+            
+            # Processar no máximo 10 transações por bloco
+            max_transactions_to_process = 10
+            processed_count = 0
+            
+            for tx in block.transactions:
+                if processed_count >= max_transactions_to_process:
+                    break
+                    
+                # Usar timestamp real do bloco
+                block_timestamp = datetime.fromtimestamp(block.timestamp, tz=timezone.utc)
+                
+                # Converter ETH para USD
+                eth_value = float(Web3.from_wei(tx.value, 'ether'))
+                usd_value = self.eth_to_usd(eth_value)
+                
+                # MODO FAST: NÃO buscar datas de funding (economiza tempo)
+                transaction = {
+                    "hash": tx.hash.hex(),
+                    "from_address": tx['from'],
+                    "to_address": tx.get('to', ''),
+                    "value": usd_value,  # Valor em USD para as regras
+                    "eth_value": eth_value,  # Mantém valor original em ETH para logs
+                    "gas_price": float(Web3.from_wei(tx.gasPrice, 'gwei')),
+                    "timestamp": block_timestamp.isoformat(),
+                    "block_number": block_number,
+                    "transaction_type": "TRANSFER"
+                    # fundeddate_from e fundeddate_to são omitidos intencionalmente
+                }
+                
+                # Separar por tipo para priorizar transações com valor
+                if transaction["eth_value"] > 0:
+                    value_transactions.append(transaction)
+                else:
+                    contract_transactions.append(transaction)
+                
+                processed_count += 1
+            
+            # Priorizar transações com valor, depois contratos
+            value_transactions.sort(key=lambda x: x["eth_value"], reverse=True)
+            
+            # Pegar até 3 transações com valor + 2 de contrato
+            transactions.extend(value_transactions[:3])
+            transactions.extend(contract_transactions[:2])
+            
+            # Se não há transações com valor, pegar mais contratos
+            if not value_transactions:
+                transactions = contract_transactions[:5]
+            
+            # Se ainda não temos transações suficientes, pegar mais contratos
+            if len(transactions) < 3:
+                remaining = contract_transactions[len(transactions):]
+                transactions.extend(remaining[:5-len(transactions)])
+            
+            # Limitar total a 5 transações
+            transactions = transactions[:5]
+            
+            logger.debug(f"Block {block_number} (FAST): Found {len(value_transactions)} value TXs, {len(contract_transactions)} contract TXs, returning {len(transactions)} TXs")
+            
+            return transactions
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter transações reais (modo fast): {e}")
             return []
     
     def eth_to_usd(self, eth_amount: float) -> float:
@@ -298,6 +374,23 @@ class BlockchainProvider:
                         }
             except Exception as e:
                 logger.error(f"Erro ao obter informações do endereço {address}: {e}")
+        elif self.mode == "real_fast":
+            # Modo fast: usar Web3 direto (mais rápido que Etherscan)
+            try:
+                if self.web3:
+                    balance_wei = self.web3.eth.get_balance(address)
+                    balance_eth = Web3.from_wei(balance_wei, 'ether')
+                    # Verificar se é contrato (tem código)
+                    code = self.web3.eth.get_code(address)
+                    is_contract = len(code) > 0
+                    return {
+                        "address": address,
+                        "balance_eth": float(balance_eth),
+                        "balance_wei": balance_wei,
+                        "is_contract": is_contract
+                    }
+            except Exception as e:
+                logger.error(f"Erro ao obter informações do endereço {address} (modo fast): {e}")
         
         # Fallback para dados simulados
         return {
@@ -311,9 +404,14 @@ class BlockchainProvider:
         """
         Obtém a data real de funding de uma carteira buscando a primeira transação
         MODO REAL: usa SEMPRE Etherscan API - NUNCA simula
+        MODO REAL_FAST: retorna None (não busca funding date para performance)
         MODO SIMULAÇÃO: gera uma data baseada em padrões realísticos
         """
         if not address or address == '':
+            return None
+            
+        # MODO FAST: retornar None para não fazer chamadas de API
+        if self.mode == "real_fast":
             return None
             
         # Verificar cache primeiro
@@ -577,7 +675,7 @@ class ContinuousMonitor:
         
         # Variáveis para modo real
         last_block = None
-        if self.blockchain_provider.mode == "real":
+        if self.blockchain_provider.mode in ["real", "real_fast"]:
             # Inicializar preço ETH/USD
             try:
                 await self.get_eth_price_usd()
@@ -593,7 +691,7 @@ class ContinuousMonitor:
             while self.is_running:
                 transactions = []
                 
-                if self.blockchain_provider.mode == "real":
+                if self.blockchain_provider.mode in ["real", "real_fast"]:
                     # Monitoramento de blocos reais
                     current_block = await self.blockchain_provider.get_latest_block()
                     
@@ -656,20 +754,23 @@ class ContinuousMonitor:
                         risk_icon = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🔴", "CRITICAL": "🟣"}.get(risk_level, "⚪")
                         
                         # Ajustar formato do log baseado no modo
-                        if self.blockchain_provider.mode == "real":
+                        if self.blockchain_provider.mode in ["real", "real_fast"]:
                             eth_value = transaction.get('eth_value', transaction['value'] / self.eth_price_usd)
                             usd_value = transaction['value']
                             
-                            # Formatação das datas de funding
+                            # Formatação das datas de funding (podem ser None no modo real_fast)
                             funded_from = transaction.get('fundeddate_from', 'N/A')
                             funded_to = transaction.get('fundeddate_to', 'N/A')
                             funded_from_display = funded_from[:19] if funded_from and funded_from != 'N/A' else 'N/A'
                             funded_to_display = funded_to[:19] if funded_to and funded_to != 'N/A' else 'N/A'
                             
+                            # Adicionar indicador de modo
+                            mode_indicator = " (FAST)" if self.blockchain_provider.mode == "real_fast" else " (FULL)"
+                            
                             tx_timestamp = transaction.get('timestamp', 'N/A')
                             tx_timestamp_display = tx_timestamp[:19] if tx_timestamp and tx_timestamp != 'N/A' else 'N/A'
                             
-                            print(f"{status_icon} TX #{self.transaction_count:04d} | "
+                            print(f"{status_icon} TX #{self.transaction_count:04d}{mode_indicator} | "
                                   f"{eth_value:.6f} ETH (${usd_value:,.2f} USD) | "
                                   f"{risk_icon} {risk_level} | "
                                   f"Risk: {risk_score:.3f} | "
@@ -735,9 +836,11 @@ class ContinuousMonitor:
                                   f"Rate: {tx_per_min:.1f} tx/min | "
                                   f"Uptime: {uptime/60:.1f}m\n")
                 
-                # Aguardar intervalo (mais longo para modo real)
+                # Aguardar intervalo (mais longo para modo real, mais rápido para real_fast)
                 if self.blockchain_provider.mode == "real":
                     await asyncio.sleep(interval_seconds * 2)  # Blocos são mais lentos
+                elif self.blockchain_provider.mode == "real_fast":
+                    await asyncio.sleep(interval_seconds)  # Modo rápido usa intervalo normal
                 else:
                     await asyncio.sleep(interval_seconds)
                 
@@ -757,8 +860,10 @@ class ContinuousMonitor:
             print(f"   📈 Detection Rate: {(self.suspicious_count/max(1,self.transaction_count))*100:.1f}%")
             print(f"   ⏱️  Total Runtime: {total_time/60:.1f} minutes")
             print(f"   🔧 Avg Rate: {(self.transaction_count/max(1,total_time))*60:.1f} tx/min")
-            if self.blockchain_provider.mode == "real":
+            if self.blockchain_provider.mode in ["real", "real_fast"]:
                 print(f"   📦 Blocks Processed: {len(self.processed_blocks)}")
+                if self.blockchain_provider.mode == "real_fast":
+                    print(f"   ⚡ Mode: REAL_FAST (no funding date lookups)")
 
 def main():
     """Função principal"""
@@ -766,9 +871,9 @@ def main():
     parser = argparse.ArgumentParser(description="TecBan Continuous Monitor")
     parser.add_argument(
         "--mode", 
-        choices=["simulation", "real"], 
+        choices=["simulation", "real", "real_fast"], 
         default="simulation",
-        help="Modo de operação: simulation (padrão) ou real"
+        help="Modo de operação: simulation (padrão), real (com Etherscan) ou real_fast (só Infura)"
     )
     parser.add_argument(
         "--interval", 
@@ -785,19 +890,23 @@ def main():
     args = parser.parse_args()
     
     # Verificar variáveis de ambiente para modo real
-    if args.mode == "real":
+    if args.mode in ["real", "real_fast"]:
         infura_url = os.getenv("INFURA_URL")
         etherscan_api = os.getenv("ETHERSCAN_API_KEY")
         
         if not infura_url:
-            print("⚠️  Para usar modo real, configure INFURA_URL no arquivo .env")
+            print("⚠️  Para usar modo real/real_fast, configure INFURA_URL no arquivo .env")
             print("   Exemplo: INFURA_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID")
             print("🎭 Continuando em modo simulação...\n")
             args.mode = "simulation"
         
-        if not etherscan_api:
+        if args.mode == "real" and not etherscan_api:
             print("⚠️  Para usar modo real completo, configure ETHERSCAN_API_KEY no arquivo .env")
-            print("   Análise de endereços será limitada sem API key\n")
+            print("   Análise de endereços será limitada sem API key")
+            print("💡 Use --mode real_fast para pular verificações de funding date\n")
+        elif args.mode == "real_fast":
+            print("⚡ Modo REAL_FAST: usando apenas Infura (sem Etherscan)")
+            print("   Transações não terão dados de funding date para melhor performance\n")
     
     # Criar monitor
     monitor = ContinuousMonitor(api_url=args.api_url, mode=args.mode)

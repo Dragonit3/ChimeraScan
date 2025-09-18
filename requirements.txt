@@ -5,11 +5,11 @@ requests==2.31.0
 python-dotenv==1.0.0
 
 # Database
-sqlalchemy==2.0.21
+sqlalchemy>=2.0.23
 
 # Statistical analysis (for advanced pattern detection)
-numpy==1.24.3
-scipy==1.11.1
+numpy>=1.26.0
+scipy>=1.12.0
 
 # Development tools
 black==23.7.0
