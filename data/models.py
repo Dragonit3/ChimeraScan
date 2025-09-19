@@ -8,6 +8,16 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Boolean, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
+
+@dataclass
+class DetectionResult:
+    """Resultado da detecção de fraude"""
+    is_suspicious: bool
+    risk_score: float
+    risk_level: 'RiskLevel'
+    triggered_rules: List[str]
+    alerts: List['AlertData']
+    context: Dict[str, any]
 from sqlalchemy.orm import sessionmaker, relationship
 import uuid
 

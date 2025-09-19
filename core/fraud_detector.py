@@ -10,20 +10,11 @@ from dataclasses import dataclass
 import json
 
 from config.settings import settings
-from data.models import TransactionData, AlertData, RiskLevel, TransactionType
+from data.models import TransactionData, AlertData, RiskLevel, TransactionType, DetectionResult
+from data.simple_database import SimpleDatabase
 from interfaces.fraud_detection import IRuleEngine, IRiskScorer, IFraudDetector
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class DetectionResult:
-    """Resultado da detecção de fraude"""
-    is_suspicious: bool
-    risk_score: float
-    risk_level: RiskLevel
-    triggered_rules: List[str]
-    alerts: List[AlertData]
-    context: Dict[str, any]
 
 class FraudDetector(IFraudDetector):
     """
@@ -49,19 +40,48 @@ class FraudDetector(IFraudDetector):
             self.risk_scorer = RiskScorer()
         else:
             self.risk_scorer = risk_scorer
-        self.detection_stats = {
-            "total_analyzed": 0,
-            "suspicious_detected": 0,
-            "alerts_generated": 0,
-            "total_risk_score": 0.0,  # Para calcular média
-            "last_reset": datetime.utcnow()
-        }
+            
+        # Inicializar banco de dados simples
+        self.db = SimpleDatabase()
+        
+        # Carregar estatísticas do banco ao inicializar
+        self._load_stats_from_database()
+        
+        # Tracking de volume por período (para gráficos em tempo real)
+        self._transaction_history = []  # Lista de timestamps das últimas transações
+        self._last_volume_check = datetime.utcnow()
         
         # Cache para otimização de performance
         self._wallet_cache = {}
         self._pattern_cache = {}
         
-        logger.info("FraudDetector initialized successfully")
+        logger.info("FraudDetector initialized successfully with database persistence")
+    
+    def _load_stats_from_database(self):
+        """Carrega estatísticas do banco de dados ao inicializar"""
+        try:
+            db_stats = self.db.get_statistics()
+            
+            self.detection_stats = {
+                "total_analyzed": db_stats.get("total_analyzed", 0),
+                "suspicious_detected": db_stats.get("suspicious_detected", 0),
+                "alerts_generated": db_stats.get("alerts_generated", 0),
+                "total_risk_score": db_stats.get("total_risk_score", 0.0),
+                "last_reset": datetime.utcnow()  # Reset timer to now
+            }
+            
+            logger.info(f"Loaded stats from database: {self.detection_stats}")
+            
+        except Exception as e:
+            logger.error(f"Error loading stats from database: {e}")
+            # Fallback to empty stats
+            self.detection_stats = {
+                "total_analyzed": 0,
+                "suspicious_detected": 0,
+                "alerts_generated": 0,
+                "total_risk_score": 0.0,
+                "last_reset": datetime.utcnow()
+            }
     
     async def analyze_transaction(self, transaction: TransactionData) -> DetectionResult:
         """
@@ -86,6 +106,7 @@ class FraudDetector(IFraudDetector):
             risk_level = self._determine_risk_level(risk_score)
             
             # 4. Verificar se é suspeito
+            # CORREÇÃO: Se há alertas gerados, então é suspeito
             is_suspicious = risk_score >= settings.detection.anomaly_detection_threshold
             
             # 5. Gerar alertas se necessário
@@ -125,6 +146,9 @@ class FraudDetector(IFraudDetector):
                         )
                         alerts.append(alert)
             
+            # CORREÇÃO: Recalcular se é suspeito baseado nos alertas gerados
+            is_suspicious = len(alerts) > 0 or risk_score >= settings.detection.anomaly_detection_threshold
+            
             # 6. Compilar contexto adicional
             context = {
                 "analysis_duration_ms": (datetime.utcnow() - start_time).total_seconds() * 1000,
@@ -145,6 +169,46 @@ class FraudDetector(IFraudDetector):
                 alerts=alerts,
                 context=context
             )
+            
+            # 8. Salvar no banco de dados
+            try:
+                # Converter para formato simples
+                transaction_dict = {
+                    'hash': transaction.hash,
+                    'from_address': transaction.from_address,
+                    'to_address': transaction.to_address,
+                    'value': transaction.value,
+                    'gas_price': transaction.gas_price,
+                    'block_number': transaction.block_number,
+                    'timestamp': transaction.timestamp.isoformat()
+                }
+                
+                analysis_dict = {
+                    'is_suspicious': is_suspicious,
+                    'risk_score': risk_score,
+                    'triggered_rules': triggered_rules
+                }
+                
+                # Salvar transação
+                self.db.save_transaction(transaction_dict, analysis_dict)
+                
+                # Salvar alertas
+                for alert in alerts:
+                    alert_dict = {
+                        'transaction_hash': transaction.hash,
+                        'rule_name': alert.rule_name,
+                        'severity': alert.severity.value,
+                        'title': alert.title,
+                        'description': alert.description,
+                        'risk_score': risk_score
+                    }
+                    self.db.save_alert(alert_dict)
+                
+                logger.debug(f"Transaction and alerts persisted to database: {transaction.hash}")
+                
+            except Exception as db_error:
+                logger.error(f"Error persisting to database: {db_error}")
+                # Não falha a análise se o banco falhar
             
             logger.info(
                 f"Transaction analyzed: {transaction.hash[:10]}... "
@@ -307,6 +371,15 @@ class FraudDetector(IFraudDetector):
     
     def _update_stats(self, is_suspicious: bool, alert_count: int, risk_score: float):
         """Atualiza estatísticas de detecção"""
+        now = datetime.utcnow()
+        
+        # Registrar timestamp da transação para volume
+        self._transaction_history.append(now)
+        
+        # Limpar histórico antigo (manter apenas últimos 5 minutos)
+        cutoff_time = now - timedelta(minutes=5)
+        self._transaction_history = [t for t in self._transaction_history if t > cutoff_time]
+        
         self.detection_stats["total_analyzed"] += 1
         self.detection_stats["total_risk_score"] += risk_score
         
@@ -314,6 +387,15 @@ class FraudDetector(IFraudDetector):
             self.detection_stats["suspicious_detected"] += 1
         
         self.detection_stats["alerts_generated"] += alert_count
+    
+    def get_recent_volume(self, seconds: int = 10) -> int:
+        """Retorna número de transações processadas nos últimos X segundos"""
+        now = datetime.utcnow()
+        cutoff_time = now - timedelta(seconds=seconds)
+        
+        # Contar transações no período
+        recent_count = sum(1 for t in self._transaction_history if t > cutoff_time)
+        return recent_count
     
     def get_stats(self) -> Dict[str, any]:
         """Retorna estatísticas de detecção"""

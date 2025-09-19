@@ -51,8 +51,8 @@ class DetectionConfig:
     wash_trading_time_window: int = 300  # 5 minutos
     new_wallet_age_threshold: int = 86400  # 24 horas
     
-    # ML Model settings
-    anomaly_detection_threshold: float = 0.7
+    # Fraud Detection Thresholds
+    anomaly_detection_threshold: float = 0.5  # Threshold para marcar transação como suspeita
     pattern_detection_window: int = 3600  # 1 hora
 
 class Settings:

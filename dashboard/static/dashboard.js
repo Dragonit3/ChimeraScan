@@ -147,8 +147,8 @@ class FraudDashboard {
         // Alertas gerados
         this.updateMetricCard('alerts-generated', data.total_alerts || 0);
         
-        // Taxa de suspeitos
-        const detectionRate = data.detection_rate ? (data.detection_rate * 100).toFixed(1) : '0.0';
+        // Taxa de suspeitos (API já retorna em %)
+        const detectionRate = data.detection_rate ? data.detection_rate.toFixed(1) : '0.0';
         this.updateMetricCard('suspicious-rate', detectionRate + '%');
         
         // Tempo online (converter segundos para horas)
@@ -491,7 +491,7 @@ class FraudDashboard {
         }
 
         // Atualizar gráfico de volume de transações com janela fixa
-        if (this.charts.transactionVolume && typeof Plotly !== 'undefined' && data.transactions_analyzed !== undefined) {
+        if (this.charts.transactionVolume && typeof Plotly !== 'undefined' && data.recent_volume !== undefined) {
             const currentTime = new Date();
             const timeLabel = currentTime.toLocaleTimeString('pt-BR', { 
                 hour: '2-digit', 
@@ -502,9 +502,9 @@ class FraudDashboard {
             // Obter dados atuais do gráfico
             const currentData = this.charts.transactionVolume.data[0];
             
-            // Adicionar novo ponto
+            // Adicionar novo ponto (usando recent_volume ao invés de total)
             const newX = [...currentData.x, timeLabel];
-            const newY = [...currentData.y, data.transactions_analyzed];
+            const newY = [...currentData.y, data.recent_volume];
             
             // Manter apenas os últimos 15 pontos (aproximadamente 45 segundos)
             const maxPoints = 15;

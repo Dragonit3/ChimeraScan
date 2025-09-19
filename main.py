@@ -298,7 +298,8 @@ def get_realtime_metrics():
                 "suspicious_detected": suspicious_detected,
                 "total_alerts": fraud_stats.get("alerts_generated", 0),
                 "detection_rate": detection_rate,
-                "average_risk_score": fraud_stats.get("average_risk_score", 0.0)
+                "average_risk_score": fraud_stats.get("average_risk_score", 0.0),
+                "recent_volume": fraud_detector.get_recent_volume(10)  # Últimos 10 segundos
             })
         else:
             metrics.update({
@@ -306,7 +307,8 @@ def get_realtime_metrics():
                 "suspicious_detected": 0,
                 "total_alerts": 0,
                 "detection_rate": 0.0,
-                "average_risk_score": 0.0
+                "average_risk_score": 0.0,
+                "recent_volume": 0
             })
         
         # Estatísticas do gerenciador de alertas
