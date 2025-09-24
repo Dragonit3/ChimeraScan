@@ -1,7 +1,15 @@
 # 🛡️ ChimeraScan
 ## Sistema de Detecção de Fraudes em Blockchain Ethereum
 
-Sistema enterprise de detecção de fraudes em tempo real para transações Ethereum, com dashboard interativo, alertas automáticos e ferramentas de análise manual.
+Sistema enterprise de detecção de fraudes em tempo real para transações Ethereum, com dashboard interativo, alertas automáticos e ferramentas ## 📊 Dashboard Features
+
+- **⏱️ Real-time**: Atualização a cada 3 segundos
+- **📊 Gráficos**: Risk score e volume de transações
+- **🚨 Alertas**: Lista interativa com detalhes
+- **📱 Responsivo**: Funciona em mobile e desktop
+- **🔍 Modal**: Popup com informações detalhadas da transação
+- **🆕 Persistência**: Alertas mantidos após reinicialização
+- **🆕 Limpar Histórico**: Reset completo com confirmaçãoise manual.
 
 ## ⚡ Quick Start
 
@@ -35,12 +43,17 @@ python continuous_monitor.py --mode real
 - **Gráficos**: Risk score e volume em tempo real com Plotly.js
 - **Alertas**: Lista interativa com popup detalhado
 - **Múltiplos Alertas**: Suporte a vários alertas por transação
+- **🆕 Persistência**: Alertas mantidos após reinicialização
+- **🆕 Limpar Histórico**: Botão para reset completo do sistema
+- **🆕 Relatórios PDF**: Geração automática de relatórios profissionais
 
 ### ✅ Sistema de Detecção
 - **Carteiras Novas**: Detecta carteiras criadas recentemente (`fundeddate`)
 - **Alto Valor**: Transações acima de $10,000 USD
 - **Blacklist Database**: Sistema completo de blacklist com SQLite
 - **Risk Score**: Pontuação 0.0-1.0 baseada em múltiplos fatores
+- **🆕 Persistência**: Banco de dados SQLite unificado (`chimera_data.db`)
+- **🆕 Context Data**: Informações detalhadas preservadas em JSON
 
 ### ✅ Banco de Dados de Blacklist
 - **SQLite**: Banco persistente para endereços suspeitos
@@ -80,8 +93,16 @@ Content-Type: application/json
 ### Consultar Alertas
 ```bash
 GET /api/v1/alerts
+GET /api/v1/alerts/stats
 GET /api/v1/metrics/realtime
 GET /health
+
+# 🆕 Limpar histórico completo
+POST /api/v1/database/clear-alerts
+
+# 🆕 Gerar relatório PDF
+POST /api/v1/reports/generate-pdf
+GET /api/v1/reports/download/<filename>
 ```
 
 ## 🔧 Configuração
@@ -218,6 +239,9 @@ ChimeraScan/
 - **🚨 Alertas**: Lista interativa com detalhes
 - **📱 Responsivo**: Funciona em mobile e desktop
 - **🔍 Modal**: Popup com informações detalhadas da transação
+- **🆕 Persistência**: Alertas mantidos após reinicialização
+- **🆕 Limpar Histórico**: Reset completo com confirmação
+- **🆕 Relatórios PDF**: Geração de relatórios profissionais com um clique
 
 ## 🚨 Troubleshooting
 
@@ -243,8 +267,19 @@ python quick_analyzer.py 0xtest 0x1234567890abcdef1234567890abcdef12345678 1000
 - Checar console do browser (F12) para erros JavaScript
 - Testar endpoint: http://localhost:5000/api/v1/metrics/realtime
 
+**Banco de dados corrompido**
+```bash
+# Backup do banco atual
+copy chimera_data.db chimera_data.db.backup
+
+# Limpar via dashboard ou API
+curl -X POST http://localhost:5000/api/v1/database/clear-alerts
+```
+
 ## 📝 Documentação Adicional
 - **API**: `API_DOCUMENTATION.md`
+- **🆕 Database Integration**: `DATABASE_INTEGRATION.md`
+- **🆕 Blacklist System**: `BLACKLIST_DATABASE.md`
 
 ---
 

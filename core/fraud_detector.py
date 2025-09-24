@@ -192,19 +192,10 @@ class FraudDetector(IFraudDetector):
                 # Salvar transação
                 self.db.save_transaction(transaction_dict, analysis_dict)
                 
-                # Salvar alertas
-                for alert in alerts:
-                    alert_dict = {
-                        'transaction_hash': transaction.hash,
-                        'rule_name': alert.rule_name,
-                        'severity': alert.severity.value,
-                        'title': alert.title,
-                        'description': alert.description,
-                        'risk_score': risk_score
-                    }
-                    self.db.save_alert(alert_dict)
+                # Não persiste alertas aqui - isso é responsabilidade do AlertManager
+                # Os alertas serão persistidos quando processados pelo AlertManager
                 
-                logger.debug(f"Transaction and alerts persisted to database: {transaction.hash}")
+                logger.debug(f"Transaction persisted to database: {transaction.hash}")
                 
             except Exception as db_error:
                 logger.error(f"Error persisting to database: {db_error}")

@@ -18,8 +18,9 @@ from di.container import container
 from interfaces.fraud_detection import (
     IFraudDetector, IAlertManager, IBlockchainMonitor
 )
-from data.models import TransactionData, TransactionType, AlertData
+from data.models import TransactionData, TransactionType, AlertData, RiskLevel
 from config.settings import settings
+from reports.pdf_generator import PDFReportGenerator
 
 # Configurar logging
 logging.basicConfig(
@@ -407,6 +408,204 @@ def get_alerts():
     except Exception as e:
         logger.error(f"Error getting alerts: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/api/v1/alerts/<int:alert_id>/resolve', methods=['POST'])
+def resolve_alert(alert_id):
+    """Resolve um alerta específico"""
+    try:
+        if not alert_manager:
+            return jsonify({"error": "System not initialized"}), 503
+        
+        data = request.get_json() or {}
+        resolution = data.get('resolution', 'Resolved via API')
+        resolved_by = data.get('resolved_by', 'api_user')
+        
+        # Atualizar status no banco de dados
+        success = alert_manager.db.update_alert_status(alert_id, 'resolved', resolved_by)
+        
+        if success:
+            return jsonify({
+                "status": "success",
+                "message": f"Alert {alert_id} resolved successfully",
+                "resolved_by": resolved_by,
+                "resolved_at": datetime.utcnow().isoformat()
+            })
+        else:
+            return jsonify({"error": "Alert not found or already resolved"}), 404
+        
+    except Exception as e:
+        logger.error(f"Error resolving alert: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/api/v1/alerts/stats', methods=['GET'])
+def get_alert_stats():
+    """Retorna estatísticas detalhadas de alertas"""
+    try:
+        if not alert_manager:
+            return jsonify({"error": "System not initialized"}), 503
+        
+        # Estatísticas do alert manager
+        alert_stats = alert_manager.get_stats()
+        
+        # Estatísticas adicionais do banco
+        db_stats = alert_manager.db.get_alert_statistics()
+        
+        return jsonify({
+            "alert_manager_stats": alert_stats,
+            "database_stats": db_stats,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting alert stats: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/api/v1/database/clear-alerts', methods=['POST'])
+def clear_alert_history():
+    """Limpa todo o histórico de alertas, transações e reseta estatísticas"""
+    try:
+        if not alert_manager:
+            return jsonify({"error": "System not initialized"}), 503
+        
+        # Limpar TODOS os dados do banco (alertas + transações)
+        success = alert_manager.db.clear_all_data()
+        
+        if success:
+            # Limpar também dados em memória
+            alert_manager.active_alerts.clear()
+            alert_manager.stored_alerts.clear()
+            
+            # Reset das estatísticas do alert_manager
+            alert_manager.reset_stats()
+            
+            # Reset das estatísticas do fraud_detector
+            if fraud_detector:
+                fraud_detector.reset_stats()
+            
+            logger.info("Complete alert and transaction history cleared via API")
+            
+            return jsonify({
+                "status": "success",
+                "message": "All data and statistics cleared successfully",
+                "timestamp": datetime.utcnow().isoformat(),
+                "alerts_cleared": True,
+                "transactions_cleared": True,
+                "stats_reset": True
+            })
+        else:
+            return jsonify({"error": "Failed to clear data"}), 500
+        
+    except Exception as e:
+        logger.error(f"Error clearing data: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/api/v1/reports/generate-pdf', methods=['POST'])
+def generate_pdf_report():
+    """Gera relatório em PDF com as métricas atuais do dashboard"""
+    try:
+        if not alert_manager or not fraud_detector:
+            return jsonify({"error": "System not initialized"}), 503
+        
+        # Coletar dados das métricas atuais
+        uptime_seconds = (datetime.utcnow() - app_state["start_time"]).total_seconds()
+        uptime_minutes = uptime_seconds / 60
+        
+        metrics_data = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "system_status": "healthy" if (fraud_detector and alert_manager) else "initializing",
+            "monitoring_active": app_state["monitoring_active"],
+            "uptime_seconds": uptime_seconds,
+            "uptime_minutes": uptime_minutes
+        }
+        
+        # Estatísticas do detector de fraudes
+        if fraud_detector:
+            fraud_stats = fraud_detector.get_stats()
+            
+            # Calcular detection_rate baseado em suspicious_detected vs total_analyzed
+            total_analyzed = fraud_stats.get("total_analyzed", 0)
+            suspicious_detected = fraud_stats.get("suspicious_detected", 0)
+            detection_rate = round((suspicious_detected / max(total_analyzed, 1)) * 100, 2) if total_analyzed > 0 else 0.0
+            
+            metrics_data.update({
+                "transactions_analyzed": total_analyzed,
+                "suspicious_detected": suspicious_detected,
+                "total_alerts": fraud_stats.get("alerts_generated", 0),
+                "detection_rate": detection_rate,
+                "average_risk_score": fraud_stats.get("average_risk_score", 0.0),
+            })
+        else:
+            metrics_data.update({
+                "transactions_analyzed": 0,
+                "suspicious_detected": 0,
+                "total_alerts": 0,
+                "detection_rate": 0.0,
+                "average_risk_score": 0.0,
+            })
+        
+        # Estatísticas do gerenciador de alertas
+        if alert_manager:
+            alert_stats = alert_manager.get_stats()
+            db_stats = alert_manager.db.get_alert_statistics()
+            
+            metrics_data.update({
+                "active_alerts": db_stats.get("active_alerts", 0),
+                "alerts_last_hour": db_stats.get("alerts_last_hour", 0),
+                "high_severity_alerts": db_stats.get("high_severity_alerts", 0),
+            })
+        else:
+            metrics_data.update({
+                "active_alerts": 0,
+                "alerts_last_hour": 0,
+                "high_severity_alerts": 0,
+            })
+        
+        # Coletar alertas recentes
+        alerts_data = []
+        if alert_manager:
+            try:
+                recent_alerts = alert_manager.db.get_recent_alerts(20)
+                alerts_data = recent_alerts
+            except Exception as e:
+                logger.warning(f"Could not fetch recent alerts for PDF: {e}")
+        
+        # Gerar PDF
+        pdf_generator = PDFReportGenerator()
+        
+        # Definir caminho do arquivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"ChimeraScan_Report_{timestamp}.pdf"
+        output_path = os.path.join("reports", filename)
+        
+        # Garantir que o diretório existe
+        os.makedirs("reports", exist_ok=True)
+        
+        # Gerar relatório
+        pdf_path = pdf_generator.generate_report(metrics_data, alerts_data, output_path)
+        
+        logger.info(f"PDF report generated successfully: {pdf_path}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "PDF report generated successfully",
+            "filename": filename,
+            "download_url": f"/api/v1/reports/download/{filename}",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating PDF report: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/api/v1/reports/download/<filename>')
+def download_report(filename):
+    """Download de relatório PDF gerado"""
+    try:
+        reports_dir = os.path.join(os.getcwd(), "reports")
+        return send_from_directory(reports_dir, filename, as_attachment=True)
+    except Exception as e:
+        logger.error(f"Error downloading report: {e}")
+        return jsonify({"error": "File not found"}), 404
 
 @app.route('/api/v1/monitoring/start', methods=['POST'])
 def start_monitoring():

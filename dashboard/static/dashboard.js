@@ -872,7 +872,99 @@ document.addEventListener('DOMContentLoaded', () => {
     window.dashboard = new FraudDashboard();
 });
 
-// Adicionar CSS para animação de atualização
+// Função para limpar histórico de alertas
+async function clearAlertHistory() {
+    if (!confirm('Tem certeza que deseja limpar TODOS os dados (alertas + transações)?\n\nEsta ação irá:\n- Zerar todas as métricas do dashboard\n- Remover todo o histórico de alertas\n- Remover todas as transações analisadas\n\nEsta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    const button = document.getElementById('clear-history-btn');
+    const originalText = button.innerHTML;
+    
+    try {
+        // Desabilitar botão e mostrar loading
+        button.disabled = true;
+        button.innerHTML = '<span style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 16px; height: 16px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>Limpando...</span>';
+        
+        const response = await fetch('/api/v1/database/clear-alerts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            // Mostrar sucesso
+            button.innerHTML = '<span style="color: #10b981;">✅ Limpo!</span>';
+            
+            // Recarregar dados do dashboard
+            await window.dashboard.loadDashboardData();
+            
+            // Mostrar notificação
+            showNotification('Todos os dados foram limpos com sucesso!', 'success');
+            
+        } else {
+            throw new Error('Falha ao limpar dados');
+        }
+        
+    } catch (error) {
+        console.error('Error clearing alert history:', error);
+        button.innerHTML = '<span style="color: #ef4444;">❌ Erro</span>';
+        showNotification('Erro ao limpar dados do sistema', 'error');
+    }
+    
+    // Restaurar botão após 2 segundos
+    setTimeout(() => {
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }, 2000);
+}
+
+// Função para mostrar notificações
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        border-radius: 0.5rem;
+        color: white;
+        font-weight: 500;
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    // Cores baseadas no tipo
+    const colors = {
+        success: '#10b981',
+        error: '#ef4444',
+        warning: '#f59e0b',
+        info: '#3b82f6'
+    };
+    
+    notification.style.backgroundColor = colors[type] || colors.info;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Remover notificação após 4 segundos
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 4000);
+}
+
+// Adicionar CSS para animação de atualização e notificações
 const style = document.createElement('style');
 style.textContent = `
     .metric-value.updated {
@@ -884,5 +976,111 @@ style.textContent = `
         50% { transform: scale(1.05); color: #F2C744; } /* Amarelo dourado */
         100% { transform: scale(1); }
     }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    @keyframes slideIn {
+        0% { transform: translateX(100%); opacity: 0; }
+        100% { transform: translateX(0); opacity: 1; }
+    }
+    
+    @keyframes slideOut {
+        0% { transform: translateX(0); opacity: 1; }
+        100% { transform: translateX(100%); opacity: 0; }
+    }
+    
+    .notification {
+        transition: all 0.3s ease;
+    }
 `;
 document.head.appendChild(style);
+
+// Função para gerar relatório PDF
+async function generatePDFReport() {
+    const button = document.getElementById('generate-pdf-btn');
+    const originalContent = button.innerHTML;
+    
+    try {
+        // Mostrar loading no botão
+        button.disabled = true;
+        button.innerHTML = `
+            <svg width="18" height="18" class="animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle>
+                <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" class="opacity-75"></path>
+            </svg>
+            Gerando PDF...
+        `;
+        
+        // Chamar API para gerar PDF
+        const response = await fetch('/api/v1/reports/generate-pdf', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Mostrar sucesso temporariamente
+            button.innerHTML = `
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                PDF Gerado!
+            `;
+            
+            // Mostrar notificação de sucesso
+            showNotification('Relatório PDF gerado com sucesso! Download iniciado automaticamente.', 'success');
+            
+            // Iniciar download automaticamente
+            const downloadLink = document.createElement('a');
+            downloadLink.href = data.download_url;
+            downloadLink.download = data.filename;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            // Restaurar botão após 3 segundos
+            setTimeout(() => {
+                button.innerHTML = originalContent;
+                button.disabled = false;
+            }, 3000);
+            
+        } else {
+            throw new Error(data.error || 'Erro ao gerar PDF');
+        }
+        
+    } catch (error) {
+        console.error('Error generating PDF report:', error);
+        
+        // Mostrar erro no botão
+        button.innerHTML = `
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            Erro
+        `;
+        
+        // Mostrar notificação de erro
+        showNotification('Erro ao gerar relatório PDF. Tente novamente.', 'error');
+        
+        // Restaurar botão após 3 segundos
+        setTimeout(() => {
+            button.innerHTML = originalContent;
+            button.disabled = false;
+        }, 3000);
+    }
+}
+
+// Adicionar animação de spin aos elementos com classe animate-spin
+const spinStyle = document.createElement('style');
+spinStyle.textContent = `
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
+`;
+document.head.appendChild(spinStyle);

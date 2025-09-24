@@ -17,6 +17,7 @@ import requests
 from config.settings import settings
 from data.models import AlertData, RiskLevel
 from interfaces.fraud_detection import IAlertManager
+from data.simple_database import SimpleDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,12 @@ class AlertManager(IAlertManager):
         self.notification_history = []
         self.rate_limiter = {}
         
+        # 🔥 Nova integração com banco de dados persistente
+        self.db = SimpleDatabase()
+        
+        # Carregar alertas existentes do banco ao inicializar
+        self._load_alerts_from_database()
+        
         # Estatísticas
         self.stats = {
             "total_alerts": 0,
@@ -66,7 +73,65 @@ class AlertManager(IAlertManager):
             "start_time": datetime.utcnow()
         }
         
-        logger.info("AlertManager initialized")
+        logger.info("AlertManager initialized with database persistence")
+    
+    def _load_alerts_from_database(self):
+        """Carrega alertas existentes do banco de dados na inicialização"""
+        try:
+            db_alerts = self.db.get_recent_alerts(limit=1000)  # Cargar últimos 1000 alertas
+            
+            for db_alert in db_alerts:
+                # Converter alerta do banco para formato interno
+                alert_dict = {
+                    "id": f"{db_alert['transaction_hash']}_{db_alert['rule_name']}_{db_alert['id']}",
+                    "transaction_hash": db_alert["transaction_hash"],
+                    "rule_name": db_alert["rule_name"],
+                    "severity": db_alert["severity"],
+                    "title": db_alert["title"],
+                    "description": db_alert["description"],
+                    "risk_score": db_alert["risk_score"],
+                    "wallet_address": None,  # Não está no banco simples
+                    "context_data": {},
+                    "created_at": datetime.fromisoformat(db_alert["created_at"]) if isinstance(db_alert["created_at"], str) else db_alert["created_at"],
+                    "status": "active"
+                }
+                
+                # Adicionar à lista de alertas armazenados
+                self.stored_alerts.append(alert_dict)
+                
+                # Adicionar aos alertas ativos
+                tx_hash = db_alert["transaction_hash"]
+                if tx_hash not in self.active_alerts:
+                    self.active_alerts[tx_hash] = []
+                
+                # Criar um objeto AlertData simplificado para compatibilidade
+                try:
+                    alert_obj = AlertData(
+                        rule_name=db_alert["rule_name"],
+                        severity=RiskLevel(db_alert["severity"]),
+                        transaction_hash=db_alert["transaction_hash"],
+                        title=db_alert["title"],
+                        description=db_alert["description"],
+                        risk_score=db_alert["risk_score"]
+                    )
+                    
+                    self.active_alerts[tx_hash].append({
+                        "alert": alert_obj,
+                        "created_at": alert_dict["created_at"],
+                        "status": "active",
+                        "notifications_sent": 0
+                    })
+                except Exception as e:
+                    logger.warning(f"Error creating AlertData from DB alert: {e}")
+            
+            # Atualizar estatísticas
+            self.stats["total_alerts"] = len(self.stored_alerts)
+            
+            logger.info(f"Loaded {len(db_alerts)} alerts from database")
+            
+        except Exception as e:
+            logger.error(f"Error loading alerts from database: {e}")
+            # Não falha a inicialização se não conseguir carregar alertas
     
     def _load_notification_rules(self) -> List[NotificationRule]:
         """Carrega regras de notificação"""
@@ -134,6 +199,24 @@ class AlertManager(IAlertManager):
             
             # Adicionar à lista linear de alertas
             self.stored_alerts.append(alert_dict)
+            
+            # 🔥 Salvar alerta no banco de dados com TODOS os dados
+            try:
+                db_alert_data = {
+                    "transaction_hash": alert.transaction_hash,
+                    "rule_name": alert.rule_name,
+                    "severity": alert.severity.value,
+                    "title": alert.title,
+                    "description": alert.description,
+                    "risk_score": alert.risk_score,
+                    "wallet_address": alert.wallet_address,  # ✅ Agora salva wallet_address
+                    "context_data": alert.context_data       # ✅ Agora salva context_data
+                }
+                self.db.save_alert(db_alert_data)
+                logger.debug(f"Alert persisted to database: {alert.rule_name} for {alert.transaction_hash}")
+            except Exception as db_error:
+                logger.error(f"Error persisting alert to database: {db_error}")
+                # Não falha o processamento se o banco falhar
             
             # Armazenar alerta ativo (permitindo múltiplos alertas por transação)
             if alert.transaction_hash not in self.active_alerts:
@@ -413,31 +496,33 @@ _{alert.description}_
                 await asyncio.sleep(1)
     
     def get_active_alerts(self, limit: int = 1000) -> List[Dict[str, Any]]:
-        """Retorna alertas ativos (agora suportando múltiplos alertas por transação)"""
-        active_list = []
-        
-        # Percorrer todas as transações com alertas
-        for tx_hash, alert_list in self.active_alerts.items():
-            # Cada transação pode ter múltiplos alertas
-            for alert_info in alert_list:
+        """Retorna alertas ativos combinando memória e banco de dados"""
+        try:
+            # 🔥 Buscar alertas do banco de dados (fonte confiável)
+            db_alerts = self.db.get_recent_alerts(limit)
+            
+            active_list = []
+            
+            for db_alert in db_alerts:
+                # Converter alerta do banco para formato do dashboard
                 alert_dict = {
-                    "id": f"{tx_hash}_{alert_info['alert'].rule_name}",
-                    "transaction_hash": tx_hash,
-                    "rule_name": alert_info["alert"].rule_name,
-                    "severity": alert_info["alert"].severity.value,
-                    "title": alert_info["alert"].title,
-                    "description": alert_info["alert"].description,
-                    "risk_score": alert_info["alert"].risk_score,
-                    "created_at": alert_info["created_at"].isoformat(),
-                    "detected_at": alert_info["created_at"].isoformat(),
-                    "status": alert_info["status"],
-                    # Informações adicionais da transação
-                    "wallet_address": alert_info["alert"].wallet_address,
-                    "context_data": alert_info["alert"].context_data or {}
+                    "id": f"{db_alert['transaction_hash']}_{db_alert['rule_name']}_{db_alert['id']}",
+                    "transaction_hash": db_alert["transaction_hash"],
+                    "rule_name": db_alert["rule_name"],
+                    "severity": db_alert["severity"],
+                    "title": db_alert["title"],
+                    "description": db_alert["description"],
+                    "risk_score": db_alert["risk_score"],
+                    "created_at": db_alert["created_at"],
+                    "detected_at": db_alert["created_at"],
+                    "status": db_alert.get("status", "active"),
+                    # Informações adicionais
+                    "wallet_address": db_alert.get("wallet_address"),
+                    "context_data": db_alert.get("context_data", {})
                 }
                 
-                # Incluir informações de transação do contexto se disponível
-                context = alert_info["alert"].context_data or {}
+                # Extrair informações do contexto para o dashboard
+                context = db_alert.get("context_data", {})
                 if context:
                     alert_dict.update({
                         "transaction_value": context.get("transaction_value"),
@@ -450,9 +535,9 @@ _{alert.description}_
                         "block_number": context.get("block_number")
                     })
                 
-                # Se for um alerta de blacklist, adicionar informações do banco de dados
-                if alert_info["alert"].rule_name == "blacklist_interaction":
-                    context = alert_info["alert"].context_data or {}
+                # Se for um alerta de blacklist, adicionar informações específicas
+                if db_alert["rule_name"] == "blacklist_interaction":
+                    context = db_alert.get("context_data", {})
                     
                     # Verificar se há múltiplos endereços blacklistados
                     if context.get("multiple_addresses", False):
@@ -467,21 +552,51 @@ _{alert.description}_
                                 blacklist_infos.append(blacklist_info)
                         
                         if blacklist_infos:
-                            alert_dict["blacklist_infos"] = blacklist_infos  # Lista de informações
+                            alert_dict["blacklist_infos"] = blacklist_infos
                             alert_dict["multiple_blacklists"] = True
                     else:
                         # Caso tradicional de um único endereço
-                        primary_address = context.get("blacklisted_address") or alert_info["alert"].wallet_address
-                        blacklist_info = self._get_blacklist_info_sync(primary_address)
-                        if blacklist_info:
-                            alert_dict["blacklist_info"] = blacklist_info
-                            alert_dict["multiple_blacklists"] = False
+                        primary_address = context.get("blacklisted_address") or db_alert.get("wallet_address")
+                        if primary_address:
+                            blacklist_info = self._get_blacklist_info_sync(primary_address)
+                            if blacklist_info:
+                                alert_dict["blacklist_info"] = blacklist_info
+                                alert_dict["multiple_blacklists"] = False
                 
                 active_list.append(alert_dict)
-        
-        # Ordenar por data de criação (mais recentes primeiro) e limitar
-        sorted_alerts = sorted(active_list, key=lambda x: x["created_at"], reverse=True)
-        return sorted_alerts[:limit]
+            
+            # Ordenar por data de criação (mais recentes primeiro)
+            sorted_alerts = sorted(active_list, key=lambda x: x.get("created_at", ""), reverse=True)
+            
+            # Aplicar limite
+            return sorted_alerts[:limit]
+            
+        except Exception as e:
+            logger.error(f"Error getting active alerts from database: {e}")
+            
+            # Fallback para alertas em memória se banco falhar
+            active_list = []
+            
+            for tx_hash, alert_list in self.active_alerts.items():
+                for alert_info in alert_list:
+                    alert_dict = {
+                        "id": f"{tx_hash}_{alert_info['alert'].rule_name}",
+                        "transaction_hash": tx_hash,
+                        "rule_name": alert_info["alert"].rule_name,
+                        "severity": alert_info["alert"].severity.value,
+                        "title": alert_info["alert"].title,
+                        "description": alert_info["alert"].description,
+                        "risk_score": alert_info["alert"].risk_score,
+                        "created_at": alert_info["created_at"].isoformat(),
+                        "detected_at": alert_info["created_at"].isoformat(),
+                        "status": alert_info["status"],
+                        "wallet_address": alert_info["alert"].wallet_address,
+                        "context_data": alert_info["alert"].context_data or {}
+                    }
+                    active_list.append(alert_dict)
+            
+            sorted_alerts = sorted(active_list, key=lambda x: x["created_at"], reverse=True)
+            return sorted_alerts[:limit]
     
     def _get_blacklist_info_sync(self, address: str) -> Optional[Dict[str, Any]]:
         """Obtém informações de blacklist de forma síncrona para uso no get_active_alerts"""
@@ -517,25 +632,67 @@ _{alert.description}_
             return None
     
     def get_stats(self) -> Dict[str, Any]:
-        """Retorna estatísticas do sistema de alertas"""
-        uptime = (datetime.utcnow() - self.stats["start_time"]).total_seconds()
-        
-        # Contar total de alertas ativos (considerando múltiplos por transação)
-        total_active_alerts = sum(len(alert_list) for alert_list in self.active_alerts.values())
-        
-        return {
-            **self.stats,
-            "uptime_hours": uptime / 3600,
-            "alerts_per_hour": (self.stats["total_alerts"] / uptime * 3600) if uptime > 0 else 0,
-            "active_alerts_count": total_active_alerts,
-            "transactions_with_alerts": len(self.active_alerts),
-            "notification_success_rate": (
-                self.stats["notifications_sent"] / 
-                (self.stats["notifications_sent"] + self.stats["failed_notifications"])
-                if (self.stats["notifications_sent"] + self.stats["failed_notifications"]) > 0 else 1.0
-            ),
-            "queue_size": self.alert_queue.qsize()
-        }
+        """Retorna estatísticas do sistema de alertas combinando banco e memória"""
+        try:
+            # 🔥 Buscar estatísticas do banco de dados (fonte confiável)
+            db_stats = self.db.get_alert_statistics()
+            
+            uptime = (datetime.utcnow() - self.stats["start_time"]).total_seconds()
+            
+            return {
+                # Estatísticas do banco (confiáveis)
+                "total_alerts": db_stats.get("total_alerts", 0),
+                "active_alerts": db_stats.get("active_alerts", 0),
+                "resolved_alerts": db_stats.get("resolved_alerts", 0),
+                "high_severity_alerts": db_stats.get("high_severity_alerts", 0),
+                "alerts_last_hour": db_stats.get("alerts_last_hour", 0),
+                "alerts_last_day": db_stats.get("alerts_last_day", 0),
+                "alerts_by_rule": db_stats.get("alerts_by_rule", {}),
+                
+                # Estatísticas calculadas
+                "uptime_hours": uptime / 3600,
+                "alerts_per_hour": (db_stats.get("total_alerts", 0) / uptime * 3600) if uptime > 0 else 0,
+                "transactions_with_alerts": len(self.active_alerts),  # Mantido da memória
+                
+                # Estatísticas de notificação (da memória)
+                "notifications_sent": self.stats["notifications_sent"],
+                "failed_notifications": self.stats["failed_notifications"],
+                "notification_success_rate": (
+                    self.stats["notifications_sent"] / 
+                    (self.stats["notifications_sent"] + self.stats["failed_notifications"])
+                    if (self.stats["notifications_sent"] + self.stats["failed_notifications"]) > 0 else 1.0
+                ),
+                "queue_size": self.alert_queue.qsize(),
+                
+                # Estatísticas por severidade (do banco)
+                "alerts_by_severity": {
+                    "CRITICAL": db_stats.get("critical_alerts", 0),
+                    "HIGH": db_stats.get("high_alerts", 0),
+                    "MEDIUM": db_stats.get("total_alerts", 0) - db_stats.get("critical_alerts", 0) - db_stats.get("high_alerts", 0),
+                    "LOW": 0  # Calculado indiretamente
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting alert stats from database: {e}")
+            
+            # Fallback para estatísticas em memória
+            uptime = (datetime.utcnow() - self.stats["start_time"]).total_seconds()
+            total_active_alerts = sum(len(alert_list) for alert_list in self.active_alerts.values())
+            
+            return {
+                **self.stats,
+                "uptime_hours": uptime / 3600,
+                "alerts_per_hour": (self.stats["total_alerts"] / uptime * 3600) if uptime > 0 else 0,
+                "active_alerts_count": total_active_alerts,
+                "transactions_with_alerts": len(self.active_alerts),
+                "notification_success_rate": (
+                    self.stats["notifications_sent"] / 
+                    (self.stats["notifications_sent"] + self.stats["failed_notifications"])
+                    if (self.stats["notifications_sent"] + self.stats["failed_notifications"]) > 0 else 1.0
+                ),
+                "queue_size": self.alert_queue.qsize()
+            }
     
     def acknowledge_alert(self, transaction_hash: str, user: str = "system") -> bool:
         """Marca alerta como reconhecido"""
@@ -555,6 +712,26 @@ _{alert.description}_
             self.active_alerts[transaction_hash]["resolved_at"] = datetime.utcnow()
             return True
         return False
+    
+    def reset_stats(self):
+        """Reseta estatísticas do alert manager (mantém notificações)"""
+        start_time = self.stats["start_time"]
+        notifications_sent = self.stats["notifications_sent"]
+        failed_notifications = self.stats["failed_notifications"]
+        
+        self.stats = {
+            "total_alerts": 0,
+            "notifications_sent": notifications_sent,  # Manter histórico de notificações
+            "failed_notifications": failed_notifications,
+            "alerts_by_severity": {level.value: 0 for level in RiskLevel},
+            "start_time": start_time  # Manter tempo de início original
+        }
+        
+        # Limpar alertas em memória
+        self.active_alerts.clear()
+        self.stored_alerts.clear()
+        
+        logger.info("Alert manager statistics reset")
     
     async def get_recent_alerts(self, limit: int = 10) -> List[AlertData]:
         """Get recent alerts - implementing IAlertManager interface"""
